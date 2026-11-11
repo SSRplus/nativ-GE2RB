@@ -103,8 +103,14 @@ jobs:
           rm -f "$RUNNER_TEMP/game.archive"
           for t in $(find "$RUNNER_TEMP/src" -maxdepth 1 -name '*.tar'); do 7zz x -y -bso0 -bsp0 -o"$RUNNER_TEMP/src" "$t" && rm -f "$t"; done   # (.tar.gz: two layers)
           df -h / | tail -1
-          echo "--- what the archive holds:"
-          find "$RUNNER_TEMP/src" -maxdepth 3 | sed "s|$RUNNER_TEMP/src|.|" | head -40
+          {
+            echo "--- what the archive holds (every folder to 3 levels, the count of files in each; then every file outside the game's data_* folders):"
+            ( cd "$RUNNER_TEMP/src" && find . -maxdepth 3 -type d | sort | while IFS= read -r d; do printf '%7s files  %s\n' "$(find "$d" -type f | wc -l | tr -d ' ')" "$d"; done )
+            echo "--- files (not in data_*):"
+            ( cd "$RUNNER_TEMP/src" && find . -type f -not -path '*/data_*/*' -exec ls -l {} \; | awk '{ s=$5; $1=$2=$3=$4=$5=$6=$7=$8=""; sub(/^ +/,""); printf "%12d  %s\n", s, $0 }' | sort -k2 )
+            echo "--- licences (work.bin / .rif):"
+            find "$RUNNER_TEMP/src" \( -iname 'work.bin' -o -iname '*.rif' \) -exec ls -l {} \;
+          } | tee "$RUNNER_TEMP/archive-listing.txt" | sed "s|$RUNNER_TEMP/src|.|"
 
       - name: find the game in the archive
         run: |
@@ -141,8 +147,8 @@ jobs:
 
       - name: decrypt the game and its update
         run: |
-          .venv/bin/python pipeline/vitarecomp.py add --no-build "$GAME_DIR"
-          if [[ -n $PATCH_DIR ]]; then .venv/bin/python pipeline/vitarecomp.py add --no-build "$PATCH_DIR"; fi
+          .venv/bin/python pipeline/vitarecomp.py add "$GAME_DIR" --no-build
+          if [[ -n $PATCH_DIR ]]; then .venv/bin/python pipeline/vitarecomp.py add "$PATCH_DIR" --no-build; fi
           rm -rf "$RUNNER_TEMP/src"   # (the decrypted copy is what is used from here: the disk is small)
           df -h / | tail -1
           ls dump/decrypted/$TITLE

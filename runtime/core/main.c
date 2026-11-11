@@ -831,7 +831,16 @@ static void builtin_env(void) {
 	if (n) fprintf(stderr, "    the game's built-in settings applied: %d (its pack's RUN_ENV; RECOMP_NO_RUN_ENV=1 skips them)\n", n);
 #endif
 }
+#ifdef RECOMP_IOS
+/* iOS (runtime/build.py TARGET=ios): SDL starts the app and calls main (renamed SDL_main) on the UI thread; ios_boot finds the game's
+ * files and stands in for the command line (runtime/platform/ios/ios_boot.c) */
+#include <SDL3/SDL_main.h>
+int ios_boot(int *argc, char ***argv);
+#endif
 int main(int argc, char **argv) {
+#ifdef RECOMP_IOS
+	if (ios_boot(&argc, &argv)) return 1;
+#endif
 	builtin_env();
 	atexit(gaps_report);   /* GAPS-01: the GAPS line + table and gaps.json at the end of every run */
 #ifdef __linux__

@@ -1,0 +1,227 @@
+# God Eater 2: Rage Burst (US, PCSE00789, v1.01) for iPhone/iPad, rebuilt from YOUR OWN copy of the game.
+#
+# Run it by hand (Actions > ge2rb-ios > Run workflow) and paste a direct download link of your game archive. The archive holds what
+# you copied off your Vita (or a Vita3K install): app/PCSE00789, patch/PCSE00789 and Sony's firmware update file(s) (*.PUP).
+# Everything happens on one macOS 15 runner:
+#   1. the archive is downloaded and unpacked, the firmware decrypted, the game and its update decrypted (vitarecomp add)
+#   2. a pack for this release is made from your copy, the update's release added, and `vitarecomp bootstrap` runs the game headless
+#      on the runner to find the code the static analysis misses (a few rounds), then the game is recompiled to C
+#   3. that C and the runtime are compiled for iOS 16+ (arm64) with SDL3 + Metal (runtime/build.py TARGET=ios)
+#   4. artifacts, each on its own (not zipped together):
+#        GE2RB.ipa      the app, signed ad hoc, for a sideloading service
+#        GE2RB.tipa     the same app with the entitlements TrollStore keeps (more memory), for TrollStore
+#        GE2RB-gamedata the game's files: copy the folder into the app's folder in Files (On My iPhone > GE2RB). NOT in the app.
+#
+# The gamedata is YOUR copy of the game, decrypted: keep it private. In a public repository anyone signed in to GitHub can download an
+# artifact, so use a private repository (or switch the gamedata upload off and keep the files from step 1 some other way).
+# Nothing is signed with an Apple account; nothing of the game is committed anywhere.
+name: ge2rb-ios
+on:
+  workflow_dispatch:
+    inputs:
+      archive_url:
+        description: "Direct download link of the game archive (zip, 7z, rar, tar). Empty: the repository secret GAME_ARCHIVE_URL"
+        required: false
+        type: string
+        default: ""
+      bootstrap_runs:
+        description: "How many headless test rounds to find missed code (0: none; each round is minutes)"
+        required: false
+        type: string
+        default: "6"
+      upload_gamedata:
+        description: "Upload the game's files (the GE2RB-gamedata artifact)"
+        required: false
+        type: boolean
+        default: true
+permissions:
+  contents: read
+concurrency:
+  group: ge2rb-ios
+  cancel-in-progress: false
+env:
+  TITLE: PCSE00789
+  APP_NAME: GE2RB
+  IOS_MIN: "16.0"
+  ATIV_DUMP: ${{ github.workspace }}/dump
+  PYTHONUTF8: "1"
+
+jobs:
+  build:
+    runs-on: macos-15   # (Apple silicon: arm64, 3 cores, 7 GB, 14 GB disk -- a game's files are kept once, hard-linked or cloned, never copied twice)
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with: { fetch-depth: 0 }
+
+      - name: tools
+        run: |
+          brew install ninja sevenzip ldid
+          echo "ATIV_MAC_TOOLCHAIN=$HOME/toolchains/ativ-mac" >> "$GITHUB_ENV"
+          echo "ATIV_IOS_TOOLCHAIN=$HOME/toolchains/ativ-ios" >> "$GITHUB_ENV"
+          xcrun --sdk iphoneos --show-sdk-path
+          python3 --version
+          python3 -m venv .venv
+          .venv/bin/pip install -q -r requirements.txt
+          df -h / | tail -1
+
+      - name: toolchain cache (macOS, for the headless rounds)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
+        with:
+          path: ~/toolchains/ativ-mac
+          key: tc-mac-${{ hashFiles('runtime/platform/macos/setup-toolchain.sh', 'runtime/platform/ffmpeg/rawdec.c') }}
+      - name: toolchain cache (iOS)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9   # v6.1.0
+        with:
+          path: ~/toolchains/ativ-ios
+          key: tc-ios-16-${{ hashFiles('dev/ios/setup-toolchain.sh', 'runtime/platform/ffmpeg/rawdec.c') }}
+      - name: toolchains
+        run: |
+          bash runtime/platform/macos/setup-toolchain.sh
+          bash dev/ios/setup-toolchain.sh
+      - name: toolchain logs (on failure)
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for f in ~/toolchains/ativ-mac/*.log ~/toolchains/ativ-ios/*.log; do echo "::group::$f"; tail -60 "$f"; echo "::endgroup::"; done
+
+      - name: game archive
+        env:
+          INPUT_URL: ${{ inputs.archive_url }}
+          SECRET_URL: ${{ secrets.GAME_ARCHIVE_URL }}
+        run: |
+          URL="${INPUT_URL:-$SECRET_URL}"
+          [[ -n $URL ]] || { echo "::error::no download link: fill in archive_url, or add the repository secret GAME_ARCHIVE_URL"; exit 1; }
+          echo "::add-mask::$URL"
+          mkdir -p "$RUNNER_TEMP/src"
+          curl -fL --retry 5 --retry-all-errors --connect-timeout 30 -sS -o "$RUNNER_TEMP/game.archive" "$URL" \
+            || { echo "::error::the download failed: is it a direct link (the file itself, not a page)?"; exit 1; }
+          ls -l "$RUNNER_TEMP/game.archive"
+          file "$RUNNER_TEMP/game.archive" | cut -c1-120
+          7zz x -y -bso0 -bsp0 -o"$RUNNER_TEMP/src" "$RUNNER_TEMP/game.archive" \
+            || { echo "::error::the archive could not be unpacked (zip, 7z, rar and tar are read)"; exit 1; }
+          rm -f "$RUNNER_TEMP/game.archive"
+          for t in $(find "$RUNNER_TEMP/src" -maxdepth 1 -name '*.tar'); do 7zz x -y -bso0 -bsp0 -o"$RUNNER_TEMP/src" "$t" && rm -f "$t"; done   # (.tar.gz: two layers)
+          df -h / | tail -1
+          echo "--- what the archive holds:"
+          find "$RUNNER_TEMP/src" -maxdepth 3 | sed "s|$RUNNER_TEMP/src|.|" | head -40
+
+      - name: find the game in the archive
+        run: |
+          S="$RUNNER_TEMP/src"
+          GAME=$(find "$S" -type d -path "*/app/$TITLE" | head -1)
+          PATCH=$(find "$S" -type d -path "*/patch/$TITLE" | head -1)
+          [[ -n $GAME && -f $GAME/sce_sys/param.sfo ]] || { echo "::error::no app/$TITLE (with sce_sys/param.sfo) in the archive: is it the US release, God Eater 2 Rage Burst?"; exit 1; }
+          echo "GAME_DIR=$GAME" >> "$GITHUB_ENV"
+          echo "PATCH_DIR=$PATCH" >> "$GITHUB_ENV"
+          echo "game:   $GAME"; echo "update: ${PATCH:-(none in the archive: the game stays at its first release)}"
+          find "$S" -type f -iname '*.pup' -exec ls -l {} \;
+
+      - name: firmware
+        run: |
+          # (Sony's update file: the libraries every game loads. The first of the archive's files that holds them)
+          ok=
+          while IFS= read -r pup; do
+            echo "== $pup"
+            if .venv/bin/python pipeline/vitarecomp.py firmware "$pup"; then ok=1; break; fi
+          done < <(find "$RUNNER_TEMP/src" -type f -iname '*.pup' | sort)
+          [[ -n $ok ]] || { echo "::error::no firmware update file (*.PUP) in the archive could be decrypted"; exit 1; }
+
+      - name: decrypt the game and its update
+        run: |
+          .venv/bin/python pipeline/vitarecomp.py add --no-build "$GAME_DIR"
+          if [[ -n $PATCH_DIR ]]; then .venv/bin/python pipeline/vitarecomp.py add --no-build "$PATCH_DIR"; fi
+          rm -rf "$RUNNER_TEMP/src"   # (the decrypted copy is what is used from here: the disk is small)
+          df -h / | tail -1
+          ls dump/decrypted/$TITLE
+
+      - name: the game's pack
+        run: |
+          # (no pack exists for the US release: made from your copy, then the update's release added so that v1.01 is what is built)
+          .venv/bin/python pipeline/vitarecomp.py pack-init "$TITLE"
+          .venv/bin/python dev/ios/ge2rb_pack.py "$TITLE"
+          echo "::group::packs/$TITLE/pack.toml"; cat "packs/$TITLE/pack.toml"; echo "::endgroup::"
+          .venv/bin/python pipeline/vitarecomp.py versions "$TITLE" || true
+
+      - name: find the missed code (headless rounds)
+        if: ${{ inputs.bootstrap_runs != '0' }}
+        env:
+          BOOT_RUNS: ${{ inputs.bootstrap_runs }}
+        run: |
+          set +e
+          .venv/bin/python pipeline/vitarecomp.py bootstrap "$TITLE" --max "$BOOT_RUNS"
+          echo "bootstrap exit code: $?"
+          B="dump/decrypted/$TITLE/analysis/bootstrap.json"
+          if [[ -f $B ]]; then { echo '### bootstrap'; echo '```json'; cat "$B"; echo; echo '```'; } >> "$GITHUB_STEP_SUMMARY"; fi
+          exit 0   # (a game that stops early is still built with the code found so far)
+
+      - name: recompile
+        run: |
+          .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
+          .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"
+          .venv/bin/python pipeline/vitarecomp.py recompile "$TITLE"
+          du -sh dump/decrypted/$TITLE/recomp | tail -1; df -h / | tail -1
+
+      - name: build for iOS
+        env:
+          TARGET: ios
+          RECOMP_BIN: ios
+        run: .venv/bin/python pipeline/vitarecomp.py build "$TITLE"
+
+      - name: check the program
+        run: |
+          B="dump/decrypted/$TITLE/recomp/game_ios"
+          ls -l "$B"; file "$B"; lipo -info "$B"
+          vtool -show-build "$B" | grep -E "platform|minos"
+          vtool -show-build "$B" | grep -q "platform IOS" || { echo "::error::the program is not an iOS program"; exit 1; }
+
+      - name: IPA and TIPA
+        run: |
+          mkdir -p out
+          bash dev/ios/package-ios.sh "dump/decrypted/$TITLE/recomp/game_ios" "$PWD/out" "$APP_NAME" "1.0.${{ github.run_number }}"
+
+      - name: gamedata
+        run: |
+          .venv/bin/python dev/ios/stage_gamedata.py "$TITLE" "$PWD/out/gamedata/GE2RB"
+          du -sh out/gamedata/GE2RB | tail -1; ls out/gamedata/GE2RB | head -20
+
+      - name: notes
+        run: |
+          {
+            echo "### ge2rb-ios: $TITLE"
+            echo "- **$APP_NAME.tipa**: install with TrollStore. **$APP_NAME.ipa**: for a sideloading service."
+            echo "- **GE2RB-gamedata**: unzip, and copy the folder **GE2RB** into the app's folder in Files (On My iPhone > $APP_NAME), so that \`GE2RB/ge2rb.cfg\` exists. Then start the app."
+            echo "- The game's log is \`GE2RB/session.log\` in that folder."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # IPA and TIPA each as a file of its own (upload-artifact v7: not zipped)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        with:
+          path: out/GE2RB.ipa
+          archive: false
+          retention-days: 7
+          if-no-files-found: error
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        with:
+          path: out/GE2RB.tipa
+          archive: false
+          retention-days: 7
+          if-no-files-found: error
+      # the game's files: a folder, so one zip (stored, not compressed: the game's files are compressed already); kept 3 days only
+      # (the app holds the game's code, recompiled: it is the player's own too, so it is kept 7 days only)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        if: ${{ inputs.upload_gamedata }}
+        with:
+          name: GE2RB-gamedata
+          path: out/gamedata
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: logs (on failure)
+        if: failure()
+        run: |
+          for f in dump/decrypted/$TITLE/analysis/bootstrap.json dump/decrypted/$TITLE/recomp/test/test.log; do
+            [[ -f $f ]] && { echo "::group::$f"; tail -80 "$f"; echo "::endgroup::"; }
+          done
+          exit 0

@@ -1,7 +1,7 @@
 # God Eater 2: Rage Burst (US, PCSE00789, v1.01) for iPhone/iPad, rebuilt from YOUR OWN copy of the game.
 #
 # Run it by hand (Actions > ge2rb-ios > Run workflow) and paste a direct download link of your game archive. The archive holds what
-# you copied off your Vita (or a Vita3K install): app/PCSE00789, patch/PCSE00789 and Sony's firmware update file(s) (*.PUP).
+# you copied off your Vita (or a Vita3K install): app/PCSE00789 and patch/PCSE00789. Sony's firmware (PSVUPDAT.PUP 3.74) is downloaded from Sony by the workflow itself.
 # Everything happens on one macOS 15 runner:
 #   1. the archive is downloaded and unpacked, the firmware decrypted, the game and its update decrypted (vitarecomp add)
 #   2. a pack for this release is made from your copy, the update's release added, and `vitarecomp bootstrap` runs the game headless
@@ -118,14 +118,26 @@ jobs:
           find "$S" -type f -iname '*.pup' -exec ls -l {} \;
 
       - name: firmware
+        env:
+          FW_URL: http://dus01.psv.update.playstation.net/update/psv/image/2022_0209/rel_f2c7b12fe85496ec88a0391b514d6e3b/PSVUPDAT.PUP   # Sony's official 3.74 (playstation.com/support/hardware/psvita/system-software)
         run: |
-          # (Sony's update file: the libraries every game loads. The first of the archive's files that holds them)
+          # (Sony's update file: the libraries every game loads. Downloaded from Sony itself; the archive's own *.PUP files are only a fallback)
+          mkdir -p "$RUNNER_TEMP/fw"
           ok=
-          while IFS= read -r pup; do
-            echo "== $pup"
-            if .venv/bin/python pipeline/vitarecomp.py firmware "$pup"; then ok=1; break; fi
-          done < <(find "$RUNNER_TEMP/src" -type f -iname '*.pup' | sort)
-          [[ -n $ok ]] || { echo "::error::no firmware update file (*.PUP) in the archive could be decrypted"; exit 1; }
+          if curl -fL --retry 5 --retry-all-errors --connect-timeout 30 -sS -o "$RUNNER_TEMP/fw/PSVUPDAT.PUP" "$FW_URL"; then
+            ls -l "$RUNNER_TEMP/fw/PSVUPDAT.PUP"
+            if .venv/bin/python pipeline/vitarecomp.py firmware "$RUNNER_TEMP/fw/PSVUPDAT.PUP"; then ok=1; fi
+          else
+            echo "::warning::the firmware could not be downloaded from Sony: trying the archive's own *.PUP files"
+          fi
+          if [[ -z $ok ]]; then
+            while IFS= read -r pup; do
+              echo "== $pup"
+              if .venv/bin/python pipeline/vitarecomp.py firmware "$pup"; then ok=1; break; fi
+            done < <(find "$RUNNER_TEMP/src" -type f -iname '*.pup' | sort)
+          fi
+          [[ -n $ok ]] || { echo "::error::no firmware update file could be decrypted (Sony's download, nor the archive's *.PUP files)"; exit 1; }
+          rm -rf "$RUNNER_TEMP/fw"
 
       - name: decrypt the game and its update
         run: |

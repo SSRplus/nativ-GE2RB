@@ -16,7 +16,7 @@
 
 void stallprof_present(void);
 
-#if defined(__APPLE__) && defined(__aarch64__)
+#if defined(__APPLE__) && defined(__aarch64__) && !defined(RECOMP_IOS)   /* (not iOS: no mach_vm there) */
 #include <dlfcn.h>
 #include <mach/mach.h>
 #include <mach/mach_vm.h>

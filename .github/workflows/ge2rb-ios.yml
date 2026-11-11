@@ -155,7 +155,7 @@ jobs:
 
       - name: the game's pack
         run: |
-          # (no pack exists for the US release: made from your copy, the other region's pack (PCSB00875) used for what is the same, then the update's release added so that v1.01 is what is built)
+          # (no pack exists for the US release: made from your copy, the other region's pack (PCSB00875) used for its module list, then the update's release added so that v1.01 is what is built)
           .venv/bin/python pipeline/vitarecomp.py pack-init "$TITLE"
           .venv/bin/python dev/ios/ge2rb_pack.py "$TITLE" --base PCSB00875   # (the same game's pack from the other region: its modules and settings)
           echo "::group::packs/$TITLE/pack.toml"; cat "packs/$TITLE/pack.toml"; echo "::endgroup::"
@@ -177,10 +177,7 @@ jobs:
         run: |
           .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
           .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"
-          # (the 30 fps / widescreen hooks of the other region's pack, found again in this copy by their kind: only if the sites match)
-          .venv/bin/python pipeline/vitarecomp.py hooks-scan "$TITLE" || true
-          .venv/bin/python dev/ios/ge2rb_pack.py "$TITLE" --base PCSB00875 --hooks
-          grep -E '^(IHOOKS|LOAD_MODULES|RUN_ENV)' "packs/$TITLE/pack.toml" || true
+          grep -E '^(LOAD_MODULES|IHOOKS|RUN_ENV)' "packs/$TITLE/pack.toml" || true   # (no widescreen / frame rate hooks for now: the Vita's own picture, 30 fps)
           .venv/bin/python pipeline/vitarecomp.py recompile "$TITLE"
           du -sh dump/decrypted/$TITLE/recomp | tail -1; df -h / | tail -1
 

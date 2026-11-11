@@ -7,7 +7,7 @@ pack lists that release by the SHA-256 of its eboot.bin.elf, and otherwise plays
 as a second version, marked recommended (the one to play). An update that leaves the main program alone needs nothing.
 
 --base <title>: the same game's pack from another region (God Eater 2 Rage Burst: PCSB00875). What does not depend on where the code sits is
-taken from it -- LOAD_MODULES (the game's own modules, bin/*.self and modules_psvita/*.suprx), RUN_ENV and TEST_FRAMES.
+taken from it -- LOAD_MODULES (the game's own modules, bin/*.self and modules_psvita/*.suprx) and TEST_FRAMES. Not RUN_ENV (widescreen / frame rates: later).
 --hooks (after `vitarecomp analyze` and `hooks-scan`): the base's IHOOKS are addresses in ITS main program, so they are not copied. The same
 kinds of hook (frame_dt, aspect) are looked up in THIS copy's own hook candidates (analysis/hook_candidates.json), and used only if there are
 as many sites of each kind as the base has: the same code, found again. Otherwise none is set (the game plays at its own 30 fps, 16:9 picture)."""
@@ -31,7 +31,7 @@ def sha256(path):
     return h.hexdigest()
 
 
-SEED_KEYS = ("LOAD_MODULES", "RUN_ENV", "TEST_FRAMES")
+SEED_KEYS = ("LOAD_MODULES", "TEST_FRAMES")   # (RUN_ENV is left out: its widescreen and frame rate settings need the hooks, which come later)
 
 
 def set_setting(text, key, line):

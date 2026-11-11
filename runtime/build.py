@@ -155,7 +155,7 @@ def main(argv):
         # SDL3 static: its frameworks come with it (an iOS program has no dylib beside it to carry them)
         sdl_libs = [os.path.join(IT, "SDL3", "lib", "libSDL3.a")] + [w for f in ("AudioToolbox", "AVFAudio", "AVFoundation", "CoreAudio", "CoreGraphics", "CoreHaptics", "CoreMedia", "CoreMotion",
                                                                              "CoreFoundation", "Foundation", "GameController", "ImageIO", "Metal", "MobileCoreServices", "QuartzCore",
-                                                                             "UIKit", "UniformTypeIdentifiers", "CoreVideo", "CoreBluetooth") for w in ("-framework", f)]
+                                                                             "UIKit", "UniformTypeIdentifiers", "CoreVideo", "CoreBluetooth", "OpenGLES") for w in ("-framework", f)]
     elif LT:
         if not os.path.isfile(os.path.join(LT, "bin", "cc")): die(f"no Linux toolchain at {LT}: run runtime/platform/linux/setup-toolchain.sh")
         if VERIFY or PROFILE: die("VERIFY/PROFILE builds: the machine's own compiler (no ATIV_LINUX_TOOLCHAIN)")

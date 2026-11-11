@@ -75,7 +75,8 @@ int ios_boot(int *argc, char ***argv) {
 		if (!*line || *line == '#') continue;
 		char *eq = strchr(line, '='); if (!eq || eq == line) continue;
 		*eq = 0; const char *k = line, *v = eq + 1;
-		size_t vn = strlen(v) + strlen(data) * 8 + 16; char *val = malloc(vn); if (!val) continue;
+		size_t nd = 0; for (const char *q = v; (q = strstr(q, "@DATA@")); q += 6) nd++;   /* (every @DATA@ becomes the folder: RECOMP_LOAD_MODULES has one per module) */
+		size_t vn = strlen(v) + nd * strlen(data) + 16; char *val = malloc(vn); if (!val) continue;
 		put(val, vn, v, data);
 		if (!strcmp(k, "IMAGE")) snprintf(image, sizeof image, "%s/%s", data, val);
 		else if (!strcmp(k, "ENTRY")) snprintf(entry, sizeof entry, "%s", val);

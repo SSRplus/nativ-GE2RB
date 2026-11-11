@@ -42,6 +42,9 @@
 #ifndef IMGUI_DISABLE
 #include "imgui_impl_sdlgpu3.h"
 #include "imgui_impl_sdlgpu3_shaders.h"
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
 
 // SDL_GPU Data
 
@@ -467,6 +470,11 @@ static void ImGui_ImplSDLGPU3_CreateShaders()
     else
     {
         SDL_GPUShaderFormat supported_formats = SDL_GetGPUShaderFormats(v->Device);
+#if TARGET_OS_IPHONE
+        // (local change) the metallib blobs below are built for macOS: an iPhone refuses them ("library format is not
+        // supported on this platform"), so there MSL source is used when the device takes it
+        if (supported_formats & SDL_GPU_SHADERFORMAT_MSL) supported_formats &= ~(SDL_GPUShaderFormat)SDL_GPU_SHADERFORMAT_METALLIB;
+#endif
         if (supported_formats & SDL_GPU_SHADERFORMAT_METALLIB)
         {
             // Using metallib blobs (macOS 14+, iOS)

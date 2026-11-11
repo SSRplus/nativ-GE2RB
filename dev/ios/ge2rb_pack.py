@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adds the game's update to its auto-generated pack: ge2rb_pack.py <title> [--base <title of the same game, another region>] [--hooks]
+"""Adds the game's update to its auto-generated pack: ge2rb_pack.py <title> [--base <title of the same game, another region>] [--hooks] [--seeds "0xADDR:thumb ..."]
 
 `vitarecomp pack-init` writes packs/<title>/pack.toml from the game as it was added (app0): one version, the base game's. A game's
 update (patch0) that changes the main program is another release -- vitarecomp import layers the update over the game only when the
@@ -8,6 +8,8 @@ as a second version, marked recommended (the one to play). An update that leaves
 
 --base <title>: the same game's pack from another region (God Eater 2 Rage Burst: PCSB00875). What does not depend on where the code sits is
 taken from it -- LOAD_MODULES (the game's own modules, bin/*.self and modules_psvita/*.suprx) and TEST_FRAMES. Not RUN_ENV (widescreen / frame rates: later).
+--seeds: FUNCTION_SEEDS for the pack: functions the analysis missed that a run found (the log's `call to 0x...: neither recompiled code nor an import`, the
+address with its lowest bit off; :thumb when that address was odd, :arm when even), so that the next build has them from its start.
 --hooks (after `vitarecomp analyze` and `hooks-scan`): the base's IHOOKS are addresses in ITS main program, so they are not copied. The same
 kinds of hook (frame_dt, aspect) are looked up in THIS copy's own hook candidates (analysis/hook_candidates.json), and used only if there are
 as many sites of each kind as the base has: the same code, found again. Otherwise none is set (the game plays at its own 30 fps, 16:9 picture)."""
@@ -66,6 +68,19 @@ def seed_from_base(pack, base):
     return f"took from {base}: " + ", ".join(rows) if rows else f"{base} has none of {', '.join(SEED_KEYS)}"
 
 
+def set_seeds(pack, seeds):
+    """FUNCTION_SEEDS = "<addr>:<thumb|arm> ..." in the pack (every version); a line saying what was done"""
+    toks = seeds.split()
+    for t in toks:
+        if not re.fullmatch(r"0x[0-9a-fA-F]+:(thumb|arm)", t): raise SystemExit(f"ge2rb_pack: a seed is 0xADDRESS:thumb or 0xADDRESS:arm, not {t!r}")
+    if not toks: return "no seeds given"
+    text = open(pack, encoding="utf-8").read()
+    text = set_setting(text, "FUNCTION_SEEDS", f'FUNCTION_SEEDS = "{" ".join(toks)}"   # functions the analysis missed, found on runs')
+    with open(pack, "w", encoding="utf-8", newline="\n") as f: f.write(text)
+    packconf.read(pack)
+    return f"FUNCTION_SEEDS set: {' '.join(toks)}"
+
+
 def hooks_from_base(pack, base, cand_json):
     """IHOOKS of this copy: the kinds the base's IHOOKS use, at this copy's own candidate sites, when the counts match; a line saying what was done"""
     bs = packconf.read(base_pack_path(base))[0]
@@ -109,8 +124,10 @@ def add_update_version(pack, patch0):
 
 
 def main(argv):
-    base = ""; hooks = "--hooks" in argv
+    base = ""; seeds = ""; hooks = "--hooks" in argv
     args = [a for a in argv if a != "--hooks"]
+    if "--seeds" in args:
+        i = args.index("--seeds"); seeds = args[i + 1] if i + 1 < len(args) else ""; args = args[:i] + args[i + 2:]
     if "--base" in args:
         i = args.index("--base"); base = args[i + 1] if i + 1 < len(args) else ""; args = args[:i] + args[i + 2:]
     if len(args) != 1: print(__doc__); return 1
@@ -124,6 +141,7 @@ def main(argv):
         print("ge2rb_pack: " + hooks_from_base(pack, base, os.path.join(dump, "decrypted", T, "analysis", "hook_candidates.json")))
         return 0
     if base: print("ge2rb_pack: " + seed_from_base(pack, base))
+    if seeds.strip(): print("ge2rb_pack: " + set_seeds(pack, seeds))
     if not os.path.isdir(patch0): print("ge2rb_pack: no update (patch0) kept: the pack plays the game as it is"); return 0
     print("ge2rb_pack: " + add_update_version(pack, patch0))
     return 0

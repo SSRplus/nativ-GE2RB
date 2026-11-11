@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: "6"
+      function_seeds:
+        description: "Functions the game's code needs that the analysis misses, as the log reports them (call to 0xC50002F7: neither recompiled code nor an import -> 0xc50002f6:thumb, the address with its lowest bit off; odd = thumb, even = arm). Space separated; the default is the one found so far"
+        required: false
+        type: string
+        default: "0xc50002f6:thumb"
       upload_gamedata:
         description: "Upload the game's files (the GE2RB-gamedata artifact)"
         required: false
@@ -154,10 +159,12 @@ jobs:
           ls dump/decrypted/$TITLE
 
       - name: the game's pack
+        env:
+          FUNCTION_SEEDS: ${{ inputs.function_seeds }}
         run: |
           # (no pack exists for the US release: made from your copy, the other region's pack (PCSB00875) used for its module list, then the update's release added so that v1.01 is what is built)
           .venv/bin/python pipeline/vitarecomp.py pack-init "$TITLE"
-          .venv/bin/python dev/ios/ge2rb_pack.py "$TITLE" --base PCSB00875   # (the same game's pack from the other region: its modules and settings)
+          .venv/bin/python dev/ios/ge2rb_pack.py "$TITLE" --base PCSB00875 --seeds "$FUNCTION_SEEDS"   # (the same game's pack from the other region: its modules and settings)
           echo "::group::packs/$TITLE/pack.toml"; cat "packs/$TITLE/pack.toml"; echo "::endgroup::"
           .venv/bin/python pipeline/vitarecomp.py versions "$TITLE" || true
 

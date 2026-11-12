@@ -182,7 +182,8 @@ jobs:
 
       - name: recompile
         env:
-          RECOMP_UNSUP_NEAR: "0x8103eec4"   # (where the game stopped on the device: the log lists the unsupported instructions around it)
+          RECOMP_UNSUP_NEAR: "0x8103eec4"
+          RECOMP_DISASM: "0x8103eec4:0x90 0x810753bc:0x60 0x81074e04:0x40 0x810058fc:0x60"   # (where the game stopped on the device: the log lists the unsupported instructions around it)
         run: |
           .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
           .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"

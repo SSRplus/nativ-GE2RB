@@ -1763,6 +1763,16 @@ def main():
         print(f"  near {c:#x}: {len(hits)} unsupported within 0x100 bytes" + ("" if hits else " (none: that address is not one of them)"))
         for (a, t, _e) in hits[:40]:
             print(f"    near {c:#x}: {a:#x}{' <-' if a == c else ''} {t}")
+    # RECOMP_DISASM="0xADDR:LEN ...": the thumb code of [ADDR-LEN, ADDR+LEN) to the log (reading what a game does at an address
+    # that a run's log names, without the game's files: the build has them). A listing starts at ADDR-LEN and may begin mid-instruction.
+    for w in os.environ.get("RECOMP_DISASM", "").split():
+        try: a_s, _, l_s = w.partition(":"); a = int(a_s, 0) & ~1; ln = int(l_s, 0) if l_s else 0x40
+        except ValueError: continue
+        lo = max(0, a - ln)
+        code = CODE[0](lo, a + ln)
+        print(f"  disasm {a:#x} +-{ln:#x}: " + ("" if code else "(not in the image)"))
+        for k in (md.disasm(code, lo) if code else []):
+            print(f"    {k.address:#x}{' <-' if k.address == a else '   '} {k.mnemonic} {k.op_str}")
     try:
         with open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[2])), "unsupported.txt"), "w") as f:
             for (a, t, _e) in sorted(bad): f.write(f"{a:#x} {t}\n")

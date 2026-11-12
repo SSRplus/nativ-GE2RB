@@ -181,6 +181,8 @@ jobs:
           exit 0   # (a game that stops early is still built with the code found so far)
 
       - name: recompile
+        env:
+          RECOMP_UNSUP_NEAR: "0x8103eec4"   # (where the game stopped on the device: the log lists the unsupported instructions around it)
         run: |
           .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
           .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"

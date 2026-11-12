@@ -1753,6 +1753,20 @@ def main():
     rare = [u for u in bad if u[1].split()[0] not in ("bxns", "bkpt")]
     for (a, t, _e) in sorted(rare)[:60]:
         print(f"    unsupported at {a:#x}: {t}")
+    # RECOMP_UNSUP_NEAR="0xADDR ...": every unsupported instruction (bxns / bkpt too) within 0x100 bytes of each address, and
+    # all of them to unsupported.txt beside the C: a run that stops at an address the list above doesn't hold is one of those
+    near = os.environ.get("RECOMP_UNSUP_NEAR", "").split()
+    for w in near:
+        try: c = int(w, 0)
+        except ValueError: continue
+        hits = sorted(u for u in bad if abs(u[0] - c) <= 0x100)
+        print(f"  near {c:#x}: {len(hits)} unsupported within 0x100 bytes" + ("" if hits else " (none: that address is not one of them)"))
+        for (a, t, _e) in hits[:40]:
+            print(f"    near {c:#x}: {a:#x}{' <-' if a == c else ''} {t}")
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[2])), "unsupported.txt"), "w") as f:
+            for (a, t, _e) in sorted(bad): f.write(f"{a:#x} {t}\n")
+    except OSError: pass
 
 
 def write_if_changed(path, text):

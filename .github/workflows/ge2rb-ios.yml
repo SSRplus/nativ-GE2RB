@@ -33,7 +33,7 @@ on:
         description: "Functions the game's code needs that the analysis misses, as the log reports them (call to 0xC50002F7: neither recompiled code nor an import -> 0xc50002f6:thumb, the address with its lowest bit off; odd = thumb, even = arm). Space separated; the default is the one found so far"
         required: false
         type: string
-        default: "0xc50002f6:thumb"
+        default: "0xc50002f6:thumb 0xc500031a:thumb 0xc500033e:thumb 0xc5000362:thumb"
       upload_gamedata:
         description: "Upload the game's files (the GE2RB-gamedata artifact)"
         required: false

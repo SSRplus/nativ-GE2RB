@@ -366,6 +366,21 @@ class Fn:
                 e = f"({x} > {y} ? {x} - {y} : 0u)" if "sub" in mn else f"({x} + {y} > 0x{m:x}u ? 0x{m:x}u : {x} + {y})"
                 lanes.append(f"({e} << {k * bits})")
             out = [f"{self.dst(ops[0].reg)} = {' | '.join(lanes)};"]
+        elif mn in ("uadd16", "usub16"):   # ARMv6 parallel add/subtract, two unsigned 16-bit lanes, wrapping (the GE flags, which only sel reads, are not kept)
+            a, b = self.r(ops[1].reg, i), self.r(ops[2].reg, i)
+            op = "+" if mn == "uadd16" else "-"
+            out = [f"{self.dst(ops[0].reg)} = ((uint32_t)((({a}) & 0xffffu) {op} (({b}) & 0xffffu)) & 0xffffu) | ((uint32_t)((({a}) >> 16) {op} (({b}) >> 16)) << 16);"]
+        elif re.fullmatch(r"sm(la|us|ua|ls)dx?|sm(ua|us)dx?", mn):
+            # dual 16x16 signed multiplies (ARM ARM A8.8.2xx): smuad/smlad add the two products, smusd/smlsd subtract the top one from
+            # the bottom one; the x forms swap the halves of the second operand; sml* add Ra (the Q flag on overflow is not kept)
+            xs = mn.endswith("x")
+            core = mn[:-1] if xs else mn
+            a, b = self.r(ops[1].reg, i), self.r(ops[2].reg, i)
+            b_lo = f"(int32_t)(int16_t)(({b}) >> 16)" if xs else f"(int32_t)(int16_t)({b})"
+            b_hi = f"(int32_t)(int16_t)({b})" if xs else f"(int32_t)(int16_t)(({b}) >> 16)"
+            sign = "+" if core in ("smuad", "smlad") else "-"
+            acc = f" + {self.r(ops[3].reg, i)}" if core in ("smlad", "smlsd") else ""
+            out = [f"{self.dst(ops[0].reg)} = (uint32_t)((uint32_t)((int32_t)(int16_t)({a}) * {b_lo}) {sign} (uint32_t)((int32_t)(int16_t)(({a}) >> 16) * {b_hi})){acc};"]
         elif mn in ("ldr", "ldrb", "ldrh", "ldrsb", "ldrsh", "str", "strb", "strh",
                     "ldrd", "strd", "ldrex", "strex", "ldrexd", "strexd", "ldrexb", "strexb", "ldrexh", "strexh"):
             out = self.mem(i, mn, ops)
@@ -1734,6 +1749,10 @@ def main():
     from collections import Counter
     for (k, n) in Counter(u[1].split()[0] for u in bad).most_common(15):
         print(f"  {n:4} {k}")
+    # where the rare ones are (bxns / bkpt are data in code or traps: thousands of them): a run that stops at "unimplemented instruction at A" is one of these
+    rare = [u for u in bad if u[1].split()[0] not in ("bxns", "bkpt")]
+    for (a, t, _e) in sorted(rare)[:60]:
+        print(f"    unsupported at {a:#x}: {t}")
 
 
 def write_if_changed(path, text):

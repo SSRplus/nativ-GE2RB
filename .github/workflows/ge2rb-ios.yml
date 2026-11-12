@@ -183,13 +183,14 @@ jobs:
       - name: recompile
         env:
           RECOMP_UNSUP_NEAR: "0x8103eec4"
-          RECOMP_DISASM: "0x8103eb60:0x120 0xb804c994:0x20"
-          RECOMP_CALLERS: "in:0x8103ed2c in:0x8103f8e8"
+          RECOMP_DISASM: "0x8108d410:0x50 0x8108e130:0x50 0x8108f8c4:0x30 0x8108f8da:0x30 0x8108fc5e:0x50 0x81090836:0x50"
+          RECOMP_CALLERS: "0x8108d410 0x8108e130 0x8108f8c4 0x8108f8da 0x8108fc5e 0x81090836"
         run: |
           .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
           .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"
           grep -E '^(LOAD_MODULES|IHOOKS|RUN_ENV)' "packs/$TITLE/pack.toml" || true   # (no widescreen / frame rate hooks for now: the Vita's own picture, 30 fps)
           .venv/bin/python pipeline/vitarecomp.py recompile "$TITLE"
+          for f in dump/decrypted/$TITLE/recomp/diag_*.txt; do [[ -f $f ]] && { echo "== $f"; cat "$f"; }; done
           du -sh dump/decrypted/$TITLE/recomp | tail -1; df -h / | tail -1
 
       - name: build for iOS

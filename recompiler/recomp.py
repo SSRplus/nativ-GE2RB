@@ -1753,54 +1753,68 @@ def main():
     rare = [u for u in bad if u[1].split()[0] not in ("bxns", "bkpt")]
     for (a, t, _e) in sorted(rare)[:60]:
         print(f"    unsupported at {a:#x}: {t}")
-    # RECOMP_UNSUP_NEAR="0xADDR ...": every unsupported instruction (bxns / bkpt too) within 0x100 bytes of each address, and
-    # all of them to unsupported.txt beside the C: a run that stops at an address the list above doesn't hold is one of those
-    near = os.environ.get("RECOMP_UNSUP_NEAR", "").split()
-    for w in near:
-        try: c = int(w, 0)
-        except ValueError: continue
-        hits = sorted(u for u in bad if abs(u[0] - c) <= 0x100)
-        print(f"  near {c:#x}: {len(hits)} unsupported within 0x100 bytes" + ("" if hits else " (none: that address is not one of them)"))
-        for (a, t, _e) in hits[:40]:
-            print(f"    near {c:#x}: {a:#x}{' <-' if a == c else ''} {t}")
-    # RECOMP_DISASM="0xADDR:LEN ...": the thumb code of [ADDR-LEN, ADDR+LEN) to the log (reading what a game does at an address
-    # that a run's log names, without the game's files: the build has them). A listing starts at ADDR-LEN and may begin mid-instruction.
-    for w in os.environ.get("RECOMP_DISASM", "").split():
-        try: a_s, _, l_s = w.partition(":"); a = int(a_s, 0) & ~1; ln = int(l_s, 0) if l_s else 0x40
-        except ValueError: continue
-        lo = max(0, a - ln)
-        code = CODE[0](lo, a + ln)
-        print(f"  disasm {a:#x} +-{ln:#x}: " + ("" if code else "(not in the image)"))
-        for k in (md.disasm(code, lo) if code else []):
-            print(f"    {k.address:#x}{' <-' if k.address == a else '   '} {k.mnemonic} {k.op_str}")
-    # RECOMP_WORDS="0xADDR:N ...": N 32-bit words of the image at ADDR, and the text each word points at when it is printable
-    # (a game's assert record: file, line, expression; its format strings). Only what the image holds from the file: no RAM.
-    def img_str(a):
-        b = CODE[0](a, a + 120) or CODE[0](a, a + 16)
-        if not b: return None
-        t = b.split(b"\0")[0]
-        return t.decode("latin-1") if len(t) >= 3 and all(32 <= ch < 127 or ch in (9, 10) for ch in t) else None
-    for w in os.environ.get("RECOMP_WORDS", "").split():
-        try: a_s, _, n_s = w.partition(":"); a = int(a_s, 0); n = int(n_s, 0) if n_s else 4
-        except ValueError: continue
-        t0 = img_str(a)
-        print(f"  words {a:#x}: " + (f"text {t0!r}" if t0 else ""))
-        for i in range(n):
-            b = CODE[0](a + 4 * i, a + 4 * i + 4)
-            if not b: print(f"    {a + 4 * i:#x}: (not in the image)"); break
-            v = int.from_bytes(b, "little"); t = img_str(v) if v >= 0x80000000 else None
-            print(f"    {a + 4 * i:#x}: {v:#010x}" + (f" -> {t!r}" if t else ""))
-    # RECOMP_CALLERS="0xADDR ...": every function of this image with a direct bl / blx to ADDR (its entry, and the call's own
-    # address where the function's instructions hold one), to find who hands a callee what it asserts on
-    for w in os.environ.get("RECOMP_CALLERS", "").split():
-        try: tgt = int(w[3:] if w.startswith("in:") else w, 0) & ~1
-        except ValueError: continue
-        if w.startswith("in:"):   # "in:0xADDR": the callers of the function that holds the instruction at ADDR
-            own = [f for f in fns if tgt in set(f.iaddrs)]
-            if not own: print(f"  callers of the function holding {tgt:#x}: (no such function)"); continue
-            print(f"  function holding {tgt:#x}: entry {own[0].entry:#x}"); tgt = own[0].entry & ~1
-        hits = [f for f in fns if any((t & ~1) == tgt for _m, t in f.calls)]
-        print(f"  callers of {tgt:#x}: {len(hits)} function(s) in this image: " + " ".join(f"{f.entry:#x}" for f in hits[:40]))
+    # the diagnostics asked for by environment (RECOMP_UNSUP_NEAR / DISASM / WORDS / CALLERS) go to the log and to diag_<image>.txt beside the C:
+    # a load module's pass is run through a filter that shows only the "functions," line, so the files are how the CI log gets its lines
+    import io, contextlib
+    _dbuf = io.StringIO()
+    with contextlib.redirect_stdout(_dbuf):
+        # RECOMP_UNSUP_NEAR="0xADDR ...": every unsupported instruction (bxns / bkpt too) within 0x100 bytes of each address, and
+        # all of them to unsupported.txt beside the C: a run that stops at an address the list above doesn't hold is one of those
+        near = os.environ.get("RECOMP_UNSUP_NEAR", "").split()
+        for w in near:
+            try: c = int(w, 0)
+            except ValueError: continue
+            hits = sorted(u for u in bad if abs(u[0] - c) <= 0x100)
+            if not hits: continue
+            print(f"  near {c:#x}: {len(hits)} unsupported within 0x100 bytes")
+            for (a, t, _e) in hits[:40]:
+                print(f"    near {c:#x}: {a:#x}{' <-' if a == c else ''} {t}")
+        # RECOMP_DISASM="0xADDR:LEN ...": the thumb code of [ADDR-LEN, ADDR+LEN) to the log (reading what a game does at an address
+        # that a run's log names, without the game's files: the build has them). A listing starts at ADDR-LEN and may begin mid-instruction.
+        for w in os.environ.get("RECOMP_DISASM", "").split():
+            try: a_s, _, l_s = w.partition(":"); a = int(a_s, 0) & ~1; ln = int(l_s, 0) if l_s else 0x40
+            except ValueError: continue
+            lo = max(0, a - ln)
+            code = CODE[0](lo, a + ln)
+            if not code: continue
+            print(f"  disasm {a:#x} +-{ln:#x}:")
+            for k in (md.disasm(code, lo) if code else []):
+                print(f"    {k.address:#x}{' <-' if k.address == a else '   '} {k.mnemonic} {k.op_str}")
+        # RECOMP_WORDS="0xADDR:N ...": N 32-bit words of the image at ADDR, and the text each word points at when it is printable
+        # (a game's assert record: file, line, expression; its format strings). Only what the image holds from the file: no RAM.
+        def img_str(a):
+            b = CODE[0](a, a + 120) or CODE[0](a, a + 16)
+            if not b: return None
+            t = b.split(b"\0")[0]
+            return t.decode("latin-1") if len(t) >= 3 and all(32 <= ch < 127 or ch in (9, 10) for ch in t) else None
+        for w in os.environ.get("RECOMP_WORDS", "").split():
+            try: a_s, _, n_s = w.partition(":"); a = int(a_s, 0); n = int(n_s, 0) if n_s else 4
+            except ValueError: continue
+            t0 = img_str(a)
+            if CODE[0](a, a + 4) is None: continue
+            print(f"  words {a:#x}: " + (f"text {t0!r}" if t0 else ""))
+            for i in range(n):
+                b = CODE[0](a + 4 * i, a + 4 * i + 4)
+                if not b: print(f"    {a + 4 * i:#x}: (not in the image)"); break
+                v = int.from_bytes(b, "little"); t = img_str(v) if v >= 0x80000000 else None
+                print(f"    {a + 4 * i:#x}: {v:#010x}" + (f" -> {t!r}" if t else ""))
+        # RECOMP_CALLERS="0xADDR ...": every function of this image with a direct bl / blx to ADDR (its entry, and the call's own
+        # address where the function's instructions hold one), to find who hands a callee what it asserts on
+        for w in os.environ.get("RECOMP_CALLERS", "").split():
+            try: tgt = int(w[3:] if w.startswith("in:") else w, 0) & ~1
+            except ValueError: continue
+            if w.startswith("in:"):   # "in:0xADDR": the callers of the function that holds the instruction at ADDR
+                own = [f for f in fns if tgt in set(f.iaddrs)]
+                if not own: continue
+                print(f"  function holding {tgt:#x}: entry {own[0].entry:#x}"); tgt = own[0].entry & ~1
+            hits = [f for f in fns if any((t & ~1) == tgt for _m, t in f.calls)]
+            if hits: print(f"  callers of {tgt:#x}: {len(hits)} function(s) in this image: " + " ".join(f"{f.entry:#x}" for f in hits[:40]))
+    _dtxt = _dbuf.getvalue()
+    if _dtxt:
+        print(_dtxt, end="")
+        try:
+            with open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[2])), "diag_" + os.path.basename(sys.argv[2])[:-2] + ".txt"), "w") as f: f.write(_dtxt)
+        except OSError: pass
     try:
         with open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[2])), "unsupported.txt"), "w") as f:
             for (a, t, _e) in sorted(bad): f.write(f"{a:#x} {t}\n")

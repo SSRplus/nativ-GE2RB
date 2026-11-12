@@ -508,6 +508,15 @@ void recomp_unimplemented(Cpu *c, uint32_t addr) {
 	fprintf(stderr, "unimplemented instruction at %#x (lr %#x)\n", addr, c->r[14]);
 	gap(GAP_INSN, addr, "unimplemented instruction (run stops)");
 	ev_log("assert", "unimplemented instruction at %#x (lr %#x)", addr, c->r[14]);
+	/* where it came from: the registers, and the return addresses on the stack (an odd value in the code ranges: a thumb
+	 * return) -- a game's own trap (bkpt after a failed check) tells nothing else. 0x300 bytes above sp, the thread's own stack. */
+	fprintf(stderr, "  regs r0-r3 %08x %08x %08x %08x r4-r7 %08x %08x %08x %08x r8-r12 %08x %08x %08x %08x %08x sp %08x lr %08x\n",
+		c->r[0], c->r[1], c->r[2], c->r[3], c->r[4], c->r[5], c->r[6], c->r[7], c->r[8], c->r[9], c->r[10], c->r[11], c->r[12], c->r[13], c->r[14]);
+	if (c->r[13] >= 0x10000000u && c->r[13] < 0x80000000u && !(c->r[13] & 3)) {
+		fprintf(stderr, "  stack returns:");
+		for (uint32_t o = 0, n = 0; o < 0x300 && n < 24; o += 4) { uint32_t w = RD32(c->r[13] + o); if ((w & 1) && ((w >= 0x81000000u && w < 0x82000000u) || (w >= 0x88000000u && w < 0x89000000u) || (w >= 0xb8000000u && w < 0xc8000000u))) { fprintf(stderr, " sp+%x:%08x", o, w); n++; } }
+		fprintf(stderr, "\n");
+	}
 	if (*hle_last_format) fprintf(stderr, "last formatted string: %s\n", hle_last_format);
 	summary("stopped"); exit(2);
 }

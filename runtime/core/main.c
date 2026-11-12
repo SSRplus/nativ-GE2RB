@@ -517,6 +517,17 @@ void recomp_unimplemented(Cpu *c, uint32_t addr) {
 		for (uint32_t o = 0, n = 0; o < 0x300 && n < 24; o += 4) { uint32_t w = RD32(c->r[13] + o); if ((w & 1) && ((w >= 0x81000000u && w < 0x82000000u) || (w >= 0x88000000u && w < 0x89000000u) || (w >= 0xb8000000u && w < 0xc8000000u))) { fprintf(stderr, " sp+%x:%08x", o, w); n++; } }
 		fprintf(stderr, "\n");
 	}
+	/* what the registers point at (a game's own assert: its objects at the time), and one step further from the words of the
+	 * object r10 holds -- the failed check was on a pointer in an object copied there (save_ezinfo.c:126: pSaveTask->Proc) */
+	static const char *rn[] = {"r0","r1","r2","r3","r4","r5","r6","r7","r8","r9","r10","r11","r12"};
+	for (int k = 0; k < 13; k++) {
+		uint32_t a = c->r[k]; if (a < 0x10000000u || a >= 0x80000000u || (a & 3)) continue;
+		fprintf(stderr, "  mem %s=%08x:", rn[k], a); for (int w = 0; w < 20; w++) fprintf(stderr, " %08x", RD32(a + 4u * w)); fprintf(stderr, "\n");
+		if (k == 10 || k == 8) for (int w = 0; w < 20; w++) {
+			uint32_t q = RD32(a + 4u * w); if (q < 0x10000000u || q >= 0x80000000u || (q & 3)) continue;
+			fprintf(stderr, "  mem %s+%x->%08x:", rn[k], 4 * w, q); for (int x = 0; x < 12; x++) fprintf(stderr, " %08x", RD32(q + 4u * x)); fprintf(stderr, "\n");
+		}
+	}
 	if (*hle_last_format) fprintf(stderr, "last formatted string: %s\n", hle_last_format);
 	summary("stopped"); exit(2);
 }

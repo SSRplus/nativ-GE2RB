@@ -1790,6 +1790,17 @@ def main():
             if not b: print(f"    {a + 4 * i:#x}: (not in the image)"); break
             v = int.from_bytes(b, "little"); t = img_str(v) if v >= 0x80000000 else None
             print(f"    {a + 4 * i:#x}: {v:#010x}" + (f" -> {t!r}" if t else ""))
+    # RECOMP_CALLERS="0xADDR ...": every function of this image with a direct bl / blx to ADDR (its entry, and the call's own
+    # address where the function's instructions hold one), to find who hands a callee what it asserts on
+    for w in os.environ.get("RECOMP_CALLERS", "").split():
+        try: tgt = int(w[3:] if w.startswith("in:") else w, 0) & ~1
+        except ValueError: continue
+        if w.startswith("in:"):   # "in:0xADDR": the callers of the function that holds the instruction at ADDR
+            own = [f for f in fns if tgt in set(f.iaddrs)]
+            if not own: print(f"  callers of the function holding {tgt:#x}: (no such function)"); continue
+            print(f"  function holding {tgt:#x}: entry {own[0].entry:#x}"); tgt = own[0].entry & ~1
+        hits = [f for f in fns if any((t & ~1) == tgt for _m, t in f.calls)]
+        print(f"  callers of {tgt:#x}: {len(hits)} function(s) in this image: " + " ".join(f"{f.entry:#x}" for f in hits[:40]))
     try:
         with open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[2])), "unsupported.txt"), "w") as f:
             for (a, t, _e) in sorted(bad): f.write(f"{a:#x} {t}\n")

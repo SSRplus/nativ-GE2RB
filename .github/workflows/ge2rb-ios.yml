@@ -183,8 +183,8 @@ jobs:
       - name: recompile
         env:
           RECOMP_UNSUP_NEAR: "0x8103eec4"
-          RECOMP_DISASM: "0x8103ee34:0x1c0 0x8103f8e4:0x60 0x81047f80:0x30 0x81005884:0x30"
-          RECOMP_WORDS: "0x8143ffcc:4 0x8143ffdc:4 0x8135c698:4 0x81368cf8:8 0x81368c9c:8 0x81372ba4:4"   # (where the game stopped on the device: the log lists the unsupported instructions around it)
+          RECOMP_DISASM: "0x8103eb60:0x120 0xb804c994:0x20"
+          RECOMP_CALLERS: "in:0x8103ed2c in:0x8103f8e8"
         run: |
           .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
           .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"

@@ -1773,6 +1773,23 @@ def main():
         print(f"  disasm {a:#x} +-{ln:#x}: " + ("" if code else "(not in the image)"))
         for k in (md.disasm(code, lo) if code else []):
             print(f"    {k.address:#x}{' <-' if k.address == a else '   '} {k.mnemonic} {k.op_str}")
+    # RECOMP_WORDS="0xADDR:N ...": N 32-bit words of the image at ADDR, and the text each word points at when it is printable
+    # (a game's assert record: file, line, expression; its format strings). Only what the image holds from the file: no RAM.
+    def img_str(a):
+        b = CODE[0](a, a + 120) or CODE[0](a, a + 16)
+        if not b: return None
+        t = b.split(b"\0")[0]
+        return t.decode("latin-1") if len(t) >= 3 and all(32 <= ch < 127 or ch in (9, 10) for ch in t) else None
+    for w in os.environ.get("RECOMP_WORDS", "").split():
+        try: a_s, _, n_s = w.partition(":"); a = int(a_s, 0); n = int(n_s, 0) if n_s else 4
+        except ValueError: continue
+        t0 = img_str(a)
+        print(f"  words {a:#x}: " + (f"text {t0!r}" if t0 else ""))
+        for i in range(n):
+            b = CODE[0](a + 4 * i, a + 4 * i + 4)
+            if not b: print(f"    {a + 4 * i:#x}: (not in the image)"); break
+            v = int.from_bytes(b, "little"); t = img_str(v) if v >= 0x80000000 else None
+            print(f"    {a + 4 * i:#x}: {v:#010x}" + (f" -> {t!r}" if t else ""))
     try:
         with open(os.path.join(os.path.dirname(os.path.abspath(sys.argv[2])), "unsupported.txt"), "w") as f:
             for (a, t, _e) in sorted(bad): f.write(f"{a:#x} {t}\n")

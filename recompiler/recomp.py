@@ -1772,13 +1772,13 @@ def main():
         # RECOMP_DISASM="0xADDR:LEN ...": the thumb code of [ADDR-LEN, ADDR+LEN) to the log (reading what a game does at an address
         # that a run's log names, without the game's files: the build has them). A listing starts at ADDR-LEN and may begin mid-instruction.
         for w in os.environ.get("RECOMP_DISASM", "").split():
-            try: a_s, _, l_s = w.partition(":"); a = int(a_s, 0) & ~1; ln = int(l_s, 0) if l_s else 0x40
+            try: a_s, _, l_s = w.partition(":"); l_s, _, m_s = l_s.partition(":"); a = int(a_s, 0) & ~1; ln = int(l_s, 0) if l_s else 0x40
             except ValueError: continue
             lo = max(0, a - ln)
             code = CODE[0](lo, a + ln)
             if not code: continue
-            print(f"  disasm {a:#x} +-{ln:#x}:")
-            for k in (md.disasm(code, lo) if code else []):
+            print(f"  disasm {a:#x} +-{ln:#x}{' (ARM)' if m_s == 'arm' else ''}:")
+            for k in ((md_arm if m_s == "arm" else md).disasm(code, lo) if code else []):
                 print(f"    {k.address:#x}{' <-' if k.address == a else '   '} {k.mnemonic} {k.op_str}")
         # RECOMP_WORDS="0xADDR:N ...": N 32-bit words of the image at ADDR, and the text each word points at when it is printable
         # (a game's assert record: file, line, expression; its format strings). Only what the image holds from the file: no RAM.
@@ -1798,6 +1798,29 @@ def main():
                 if not b: print(f"    {a + 4 * i:#x}: (not in the image)"); break
                 v = int.from_bytes(b, "little"); t = img_str(v) if v >= 0x80000000 else None
                 print(f"    {a + 4 * i:#x}: {v:#010x}" + (f" -> {t!r}" if t else ""))
+        # RECOMP_REFS="0xVALUE ...": where a function of this image builds VALUE in a register (movw + movt, the way a game names a
+        # function or a table it keeps a pointer to), each with the code around it -- who creates the task whose Proc is VALUE
+        want = {}
+        for w in os.environ.get("RECOMP_REFS", "").split():
+            try: want[int(w, 0)] = w
+            except ValueError: pass
+        for f in (fns if want else []):
+            ins = decode(*f.src)
+            lo16 = {}
+            for i in ins:
+                if i.mnemonic == "movw":
+                    r, _, v = i.op_str.partition(", #")
+                    try: lo16[r] = int(v, 0)
+                    except ValueError: pass
+                elif i.mnemonic == "movt" and i.op_str.split(", #")[0] in lo16:
+                    r, _, v = i.op_str.partition(", #")
+                    try: val = lo16[r] | (int(v, 0) << 16)
+                    except ValueError: continue
+                    if val in want or (val | 1) in want or (val & ~1) in want:
+                        print(f"  ref {val:#x} in function {f.entry:#x} ({'ARM' if f.arm else 'thumb'}) at {i.address:#x}")
+                        a0 = max(f.entry & ~1, i.address - 0x40); code = CODE[0](a0, i.address + 0x30)
+                        for k2 in ((md_arm if f.arm else md).disasm(code, a0) if code else []):
+                            print(f"    {k2.address:#x}{' <-' if k2.address == i.address else '   '} {k2.mnemonic} {k2.op_str}")
         # RECOMP_CALLERS="0xADDR ...": every function of this image with a direct bl / blx to ADDR (its entry, and the call's own
         # address where the function's instructions hold one), to find who hands a callee what it asserts on
         for w in os.environ.get("RECOMP_CALLERS", "").split():

@@ -183,8 +183,8 @@ jobs:
       - name: recompile
         env:
           RECOMP_UNSUP_NEAR: "0x8103eec4"
-          RECOMP_DISASM: "0x8108d410:0x50 0x8108e130:0x50 0x8108f8c4:0x30 0x8108f8da:0x30 0x8108fc5e:0x50 0x81090836:0x50"
-          RECOMP_CALLERS: "0x8108d410 0x8108e130 0x8108f8c4 0x8108f8da 0x8108fc5e 0x81090836"
+          RECOMP_REFS: "0x8103f8e5 0xb804c994 0xb804c995"
+          RECOMP_DISASM: "0xb804c994:0x60:arm 0xb804c994:0x60"
         run: |
           .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
           .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"

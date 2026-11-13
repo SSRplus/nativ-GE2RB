@@ -219,20 +219,38 @@ static void h_save_slot_param(Cpu *c) {   /* (slot id, SceAppUtilSaveDataSlotPar
 	if (A1) memcpy(G(A1), p, SLOT_PARAM_SIZE);
 	RET(0);
 }
-/* sceAppUtilSaveDataSlotSearch: no layout of its arguments is known here (the SDK's structs aren't in this tree), so the first calls
- * dump what the game passed (0x60 bytes behind each of r0-r2 that points into guest memory) -- the game looks for a free slot to save into,
- * and the former stub answered 0 and left the result as it was. Still answers 0 until the layout is read from these dumps. */
+/* sceAppUtilSaveDataSlotSearch(SceAppUtilWorkBuffer *work (buf +0, size +4), const SceAppUtilSaveDataSlotSearchCond *cond,
+ * SceAppUtilSaveDataSlotSearchResult *result, mount point). Layout as the SDK declares it (from memory of its headers, not checked
+ * against a console): cond = from +0, range +4, type +8 (0: slots that exist, 1: slots that don't), order +0xc (0 ascending, 1
+ * descending); result = hitNum +0, slotList +4 (an array of slot ids, the game's own, else the work buffer). The first calls are
+ * still dumped (0x60 bytes behind each argument) so that a wrong guess shows in the log. Answers from the real slot files (.slot<N>). */
+#define SLOT_SEARCH_MAX 256
+static int guest_ptr_ok(uint32_t a) { return a >= 0x10000000u && a < 0x80000000u && !(a & 3); }
 static void h_save_slot_search(Cpu *c) {
 	static int n;
+	uint32_t work = A0, cond = A1, result = A2;
 	if (n++ < 6) {
 		uint32_t a[3] = { A0, A1, A2 };
 		for (int k = 0; k < 3; k++) {
-			if (a[k] < 0x10000000u || a[k] >= 0x80000000u || (a[k] & 3)) { fprintf(stderr, "    apputil: SaveDataSlotSearch #%d r%d = %#x\n", n, k, a[k]); continue; }
+			if (!guest_ptr_ok(a[k])) { fprintf(stderr, "    apputil: SaveDataSlotSearch #%d r%d = %#x\n", n, k, a[k]); continue; }
 			fprintf(stderr, "    apputil: SaveDataSlotSearch #%d r%d = %#x:", n, k, a[k]);
 			for (int w = 0; w < 24; w++) fprintf(stderr, " %08x", RD32(a[k] + 4u * w));
 			fprintf(stderr, "\n");
 		}
 	}
+	if (!guest_ptr_ok(cond) || !guest_ptr_ok(result)) { RET(0x80100604u); return; }   /* (no cond / result to answer into) */
+	uint32_t from = RD32(cond), range = RD32(cond + 4), type = RD32(cond + 8), order = RD32(cond + 0xc);
+	if (range > SLOT_SEARCH_MAX) range = SLOT_SEARCH_MAX;
+	uint32_t list = RD32(result + 4);
+	if (!guest_ptr_ok(list)) { list = guest_ptr_ok(RD32(work)) ? RD32(work) : 0; if (list) WR32(result + 4, list); }
+	uint32_t hits = 0; uint8_t tmp[SLOT_PARAM_SIZE];
+	for (uint32_t i = 0; i < range && list; i++) {
+		uint32_t id = order == 1 ? from + range - 1 - i : from + i;
+		int exists = slot_read(id, tmp);
+		if (type == 1 ? !exists : exists) WR32(list + 4 * hits++, id);
+	}
+	WR32(result, hits);
+	if (n <= 6) fprintf(stderr, "    apputil: SaveDataSlotSearch #%d from %u range %u type %u order %u -> %u hit(s)\n", n, from, range, type, order, hits);
 	RET(0);
 }
 static void h_save_slot_set_param(Cpu *c) { RET(slot_write(A0, A1) == 0 ? 0 : 0x80100600u); }   /* (slot id, param, mount point): a slot not yet created is created */
@@ -795,6 +813,12 @@ static void h_sysmodule_is_loaded(Cpu *c) {
 	RET(A0 < sizeof sysmodule_loaded && __atomic_load_n(&sysmodule_loaded[A0], __ATOMIC_RELAXED) ? 0 : 0x805a1001u);
 }
 /* sceAppMgrAppParamGetString(pid, param, buf, size): param 12 is the title id (np_matching2 asks for it); the others unknown */
+/* sceAppUtilAppParamGetInt(paramId, int *value): id 0 is SKU_FLAG (SDK header, from memory): 1 trial, 3 full -- a game that is installed in full. */
+static void h_app_param_int(Cpu *c) {
+	if (!A1) { RET(0x80100600u); return; }
+	if (A0 != 0) { static int said; if (!said++) fprintf(stderr, "    sceAppUtilAppParamGetInt: param %u unknown\n", A0); RET(0x80100600u); return; }
+	WR32(A1, 3); RET(0);
+}
 static void h_app_param_string(Cpu *c) {
 	if (!A2 || !A3) { RET(0x80800001u); return; }
 	if (A1 != 12) { static int said; if (!said++) fprintf(stderr, "    sceAppMgrAppParamGetString: param %u unknown\n", A1); RET(0x80800001u); return; }
@@ -825,7 +849,7 @@ const HleEntry hle_apputil[] = {
 	{"sceStoreCheckoutDialogTerm", h_cstore_term}, {"sceStoreCheckoutDialogAbort", h_cstore_abort},
 	{"sceMsgDialogAbort", h_msg_dlg_abort}, {"sceMsgDialogClose", h_msg_dlg_abort}, {"sceNetCheckDialogAbort", h_net_dlg_abort},
 	{"sceNpTrophySetupDialogAbort", h_trophy_dlg_abort}, {"sceCommonDialogSetConfigParam", h_zero},
-	{"sceAppMgrAppParamGetString", h_app_param_string},
+	{"sceAppMgrAppParamGetString", h_app_param_string}, {"sceAppUtilAppParamGetInt", h_app_param_int},
 	{"sceAppMgrReceiveSystemEvent", h_receive_system_event},
 	{"sceAppUtilSystemParamGetInt", h_system_param_int}, {"_sceAppMgrGetAppState", h_app_state}, {"sceSysmoduleIsLoaded", h_sysmodule_is_loaded},
 	{"sceSysmoduleLoadModule", h_sysmodule_load}, {"sceSysmoduleUnloadModule", h_sysmodule_unload},

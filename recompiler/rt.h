@@ -43,6 +43,7 @@ extern uint8_t *recomp_mem;
 /* provided by the host: a call to a guest address that isn't recompiled code (an import) */
 extern void recomp_call_external(Cpu *c, uint32_t addr);
 extern void recomp_unimplemented(Cpu *c, uint32_t addr);
+extern void recomp_bkpt(Cpu *c, uint32_t addr);
 extern GuestFn recomp_lookup(uint32_t addr);
 extern const char *recomp_import_name(uint32_t addr);   /* the import a stub address stands for */
 

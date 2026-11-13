@@ -327,6 +327,10 @@ static void h_def_sidechain(Cpu *c) { RET(defn(DEF_SIDECHAIN)); }
  * mixer, EQ, pitch shift) pass what reaches them through, unprocessed, like the compressor. Without them each getter
  * returned 0 and ADX2 sized its work area as -1 (a memset of 4 GiB at boot). */
 static void h_def_at9(Cpu *c) { RET(defn(DEF_SCREAM_AT9)); }
+/* sceNgsVoiceDefGetSimpleAtrac9Voice: the ATRAC9 player of the "simple" voices (the PCM one, GetSimpleVoice, shares its player module with
+ * the Scream PCM voice: PCM_PLAYER above). Taken as the one ATRAC9 player this has. The game (God Eater 2) makes a rack of 64 of them
+ * for its music and voices; as a stub it left every voice unplayable and all of it silent. */
+static void h_def_simple_at9(Cpu *c) { RET(defn(DEF_SCREAM_AT9)); }
 static void h_def_template1(Cpu *c) { RET(defn(DEF_SIMPLE)); }
 static void h_def_effect_bus(Cpu *c) { RET(defn(DEF_COMPRESSOR)); }
 
@@ -390,6 +394,13 @@ static void h_voice_output_patch(Cpu *c) {
 	pthread_mutex_unlock(&lock);
 	WR32(A3, found < 0 ? 0 : 0x60000000u + (uint32_t)found);
 	RET(found < 0 ? 0x804A000Eu : 0);
+}
+static void h_patch_volume(Cpu *c) {   /* (patch, output channel of the source, input channel of the destination, float volume -- softfp: in r3) */
+	Patch *p = patch_of(A0);
+	if (!p) { RET(0x804A0002u); return; }   /* SCE_NGS_ERROR_INVALID_PARAM */
+	if (A1 > 1 || A2 > 1) { RET(0x804A0002u); return; }
+	float f; uint32_t b = A3; memcpy(&f, &b, 4); p->vol[A1][A2] = f;
+	RET(0);
 }
 static void h_patch_volumes(Cpu *c) {   /* (patch, SceNgsVolumeMatrix*: float m[2][2]) */
 	Patch *p = patch_of(A0);
@@ -1273,7 +1284,7 @@ const HleEntry hle_ngs[] = {
 	{"sceNgsVoiceDefGetReverbBuss", h_def_reverb}, {"sceNgsVoiceDefGetScreamVoice", h_def_scream},
 	{"sceNgsVoiceDefGetScreamAtrac9Voice", h_def_scream_at9}, {"sceNgsVoiceDefGetCompressorBuss", h_def_compressor},
 	{"sceNgsVoiceDefGetCompressorSideChainBuss", h_def_sidechain},
-	{"sceNgsVoiceDefGetAtrac9Voice", h_def_at9}, {"sceNgsVoiceDefGetTemplate1", h_def_template1},
+	{"sceNgsVoiceDefGetAtrac9Voice", h_def_at9}, {"sceNgsVoiceDefGetSimpleAtrac9Voice", h_def_simple_at9}, {"sceNgsVoiceDefGetTemplate1", h_def_template1},
 	{"sceNgsVoiceDefGetDelayBuss", h_def_effect_bus}, {"sceNgsVoiceDefGetDistortionBuss", h_def_effect_bus},
 	{"sceNgsVoiceDefGetMixerBuss", h_def_effect_bus}, {"sceNgsVoiceDefGetEqBuss", h_def_effect_bus},
 	{"sceNgsVoiceDefGetPitchShiftBuss", h_def_effect_bus},
@@ -1285,7 +1296,7 @@ const HleEntry hle_ngs[] = {
 	{"sceNgsRackGetRequiredMemorySize", h_rack_mem}, {"sceNgsRackInit", h_rack_init}, {"sceNgsRackRelease", h_ok},
 	{"sceNgsRackGetVoiceHandle", h_rack_voice},
 	{"sceNgsPatchCreateRouting", h_patch_create}, {"sceNgsPatchRemoveRouting", h_patch_remove}, {"sceNgsVoiceGetOutputPatch", h_voice_output_patch},
-	{"sceNgsVoicePatchSetVolumesMatrix", h_patch_volumes},
+	{"sceNgsVoicePatchSetVolumesMatrix", h_patch_volumes}, {"sceNgsVoicePatchSetVolume", h_patch_volume},
 	{"sceNgsVoicePlay", h_voice_play}, {"sceNgsVoiceKill", h_voice_kill}, {"sceNgsVoicePause", h_voice_pause},
 	{"sceNgsVoiceKeyOff", h_voice_keyoff},   /* key-off = release and stop, then the finished callback: stubbed, a keyed-off voice stayed "playing" and a sound system that waits for a voice to stop before reusing it (Unit 13 polls GetStateData 100K times a session; Killzone frees its voice in the finished callback) never got a free voice -- a silent gun */
 	{"sceNgsVoiceResume", h_voice_resume}, {"sceNgsVoiceBypassModule", h_voice_bypass}, {"sceNgsVoiceGetInfo", h_voice_info},

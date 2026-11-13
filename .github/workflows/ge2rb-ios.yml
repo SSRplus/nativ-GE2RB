@@ -29,6 +29,16 @@ on:
         required: false
         type: string
         default: "6"
+      bootstrap_frames:
+        description: "Frames each headless round runs (60 per second of game time). Longer = further into the game"
+        required: false
+        type: string
+        default: "3000"
+      bootstrap_input:
+        description: "Scripted buttons for the headless rounds, from-to:mask,... (0x4000 = cross). Empty: cross pulsed every 90 frames from frame 300 to get past the title and through the menus"
+        required: false
+        type: string
+        default: ""
       function_seeds:
         description: "Functions the game's code needs that the analysis misses, as the log reports them (call to 0xC50002F7: neither recompiled code nor an import -> 0xc50002f6:thumb, the address with its lowest bit off; odd = thumb, even = arm). Space separated; the default is the one found so far"
         required: false
@@ -172,9 +182,17 @@ jobs:
         if: ${{ inputs.bootstrap_runs != '0' }}
         env:
           BOOT_RUNS: ${{ inputs.bootstrap_runs }}
+          BOOT_FRAMES: ${{ inputs.bootstrap_frames }}
+          BOOT_INPUT: ${{ inputs.bootstrap_input }}
         run: |
           set +e
-          .venv/bin/python pipeline/vitarecomp.py bootstrap "$TITLE" --max "$BOOT_RUNS"
+          if [[ -z $BOOT_INPUT ]]; then   # (UNVERIFIED script: cross every 90 frames, held 4)
+            for ((f=300; f<BOOT_FRAMES-10; f+=90)); do BOOT_INPUT+="$f-$((f+4)):4000,"; done
+            BOOT_INPUT=${BOOT_INPUT%,}
+          fi
+          echo "bootstrap input: $BOOT_INPUT" | cut -c1-300
+          # pack-init made the pack; bootstrap = analyze, recompile, build, headless run, repeated until no new code turns up (--max rounds)
+          TEST_INPUT="$BOOT_INPUT" .venv/bin/python pipeline/vitarecomp.py bootstrap "$TITLE" --frames "$BOOT_FRAMES" --max "$BOOT_RUNS"
           echo "bootstrap exit code: $?"
           B="dump/decrypted/$TITLE/analysis/bootstrap.json"
           if [[ -f $B ]]; then { echo '### bootstrap'; echo '```json'; cat "$B"; echo; echo '```'; } >> "$GITHUB_STEP_SUMMARY"; fi

@@ -77,8 +77,15 @@ void imedlg_ui_build(float w, float hgt) {
 	if (pad_edit && ImGui::GetActiveID() != 0) ImGui::ClearActiveID();   /* (the field re-reads the text when not being edited) */
 	/* the field: typing from the keyboard */
 	ImGui::SetNextItemWidth(-1);
+#ifdef RECOMP_IOS
+	/* iOS: the key grid below is the keyboard (touch); the system keyboard would cover half the screen and this card with it, so the
+	 * field only shows the text and never asks for it */
+	g_focus = false;
+	ImGui::InputText("##imetext", g_buf, sizeof g_buf, ImGuiInputTextFlags_ReadOnly);
+#else
 	if (g_focus || (!ImGui::IsAnyItemActive() && ImGui::GetIO().InputQueueCharacters.Size > 0)) { ImGui::SetKeyboardFocusHere(); g_focus = false; }
 	if (ImGui::InputText("##imetext", g_buf, sizeof g_buf, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackCharFilter, filter) && g_armed) answer = 1;
+#endif
 	if (g_armed && ImGui::IsKeyPressed(ImGuiKey_Escape, false)) answer = 0;
 	if (g_max) ImGui::TextDisabled("%u / %u", (unsigned)imedlg_utf8_len(g_buf), (unsigned)g_max);
 	ImGui::Spacing();
@@ -105,7 +112,9 @@ void imedlg_ui_build(float w, float hgt) {
 	}
 	ImGui::Spacing();
 	ImGui::PushTextWrapPos(0); ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+#ifndef RECOMP_IOS
 	ImGui::TextWrapped("Keyboard: type, Enter OK, Esc cancel. Pad: Cross types the key, Square deletes, Triangle space, L1 shift, Start OK, Circle cancel.");
+#endif
 	ImGui::PopStyleColor(); ImGui::PopTextWrapPos();
 	if (ImGui::Button("Cancel") && g_armed) answer = 0;
 	ImGui::SameLine();

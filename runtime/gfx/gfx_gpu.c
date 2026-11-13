@@ -4095,7 +4095,8 @@ static TexEntry *target_view(const GfxTexture *tex, TargetEntry **exact) {
 				}
 				if (v) return v;
 			}
-			if (trace_sync()) fprintf(stderr, "gpu trace: no view of target %#x fmt %#x %ux%u type %u for texture %#x fmt %#x %ux%u u%#x: decoded from guest memory\n", best->addr, best->format, best->width, best->height, best->type, tex->data, tex->format, tex->width, tex->height, tex->u_mode);
+			static int noview_logged;   /* (the first few always: why a frame is read back from guest memory every frame, without RECOMP_GPU_TRACE_SYNC) */
+			if (trace_sync() || noview_logged++ < 12) fprintf(stderr, "gpu trace: no view of target %#x fmt %#x %ux%u type %u for texture %#x fmt %#x %ux%u u%#x: decoded from guest memory\n", best->addr, best->format, best->width, best->height, best->type, tex->data, tex->format, tex->width, tex->height, tex->u_mode);
 		}
 	}
 	if (snap2) snap_to_guest(scene_entry);   /* a snapshot read no view serves: memory as the scene began, below */

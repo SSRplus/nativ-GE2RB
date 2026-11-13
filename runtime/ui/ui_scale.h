@@ -13,6 +13,9 @@ static inline float overlay_ui_scale(float h, float dpi) {
 	if (!(dpi > 0)) dpi = 1;
 	float lines = h > 544.0f * dpi ? h : 544.0f * dpi;
 	float k = lines / 720.0f;
+#ifdef RECOMP_IOS
+	{ float m = dpi * 1.1f; if (k < m) k = m; }   /* a phone: touch targets and text the size a thumb and an arm's length want (15 px at 3x is under 2 mm) */
+#endif
 	return k < 1 ? 1 : k > 4 ? 4 : k;
 }
 #endif

@@ -611,6 +611,7 @@ int audio_open(uint32_t freq, uint32_t channels, uint32_t samples) {
 	int slot = 0; while (slot < nstreams && streams[slot]) slot++;
 	if (!active || slot >= 8) return 0;
 	if (!SDL_WasInit(SDL_INIT_AUDIO) && !SDL_InitSubSystem(SDL_INIT_AUDIO)) return 0;
+	SDL_SetHint("SDL_AUDIO_CATEGORY", "playback");   /* iOS: the game's sound plays with the silent switch on and takes the audio session */
 	SDL_AudioSpec want = {SDL_AUDIO_S16, (int)channels, (int)freq};
 	/* the device's own buffer, in sample frames (before the first stream opens it): small, so what the
 	 * game hears as "played" is close to what the speakers play (RECOMP_AUDIO_FRAMES overrides) */

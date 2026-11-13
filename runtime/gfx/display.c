@@ -574,6 +574,13 @@ static void h_audio_output(Cpu *c) {   /* (port, buffer) */
 		for (uint32_t k = 0; k < n; k++) sum += (double)pcm[k] * pcm[k];
 		if (nb++ % 1000 == 0) fprintf(stderr, "    audio port %u: buffer %llu rms %.1f%s\n", i, (unsigned long long)nb, sqrt(sum / n), port_dev[i] ? "" : " (no device)");
 	}
+	if (!port_dev[i]) {   /* no device at open (iOS: "Session activation failed" at start-up, before the app is active): try again once a second */
+		static struct timespec last[8]; struct timespec now; clock_gettime(CLOCK_MONOTONIC, &now);
+		if (now.tv_sec != last[i].tv_sec) {
+			last[i] = now; port_dev[i] = audio_open(port_freq[i], port_ch[i], port_len[i]);
+			if (port_dev[i]) fprintf(stderr, "    audio port %u: playback device opened on retry\n", i);
+		}
+	}
 	if (port_dev[i]) {
 		if (A1) {
 			uint32_t n = port_len[i] * port_ch[i];

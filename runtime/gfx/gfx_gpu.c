@@ -749,6 +749,7 @@ void gfx_gpu_builds_stop(void) {
 	while (bq_running) if (pthread_cond_timedwait(&bq_idle, &bq_m, &ts)) break;
 	pthread_mutex_unlock(&bq_m);
 }
+int gfx_gpu_builds_pending(void) { pthread_mutex_lock(&bq_m); int n = bq_inflight; pthread_mutex_unlock(&bq_m); return n; }   /* shader / pipeline builds queued or running (the overlay's BUILDS line) */
 void gfx_gpu_builds_wait(void) {   /* until every queued build is done (a replay's RECOMP_GPU_ASYNC=1 measurement: how long the workers take) */
 	pthread_mutex_lock(&bq_m); while (bq_inflight) pthread_cond_wait(&bq_idle, &bq_m); pthread_mutex_unlock(&bq_m);
 }
@@ -3885,7 +3886,10 @@ static int view_mode(uint32_t tgt_fmt, const GfxTexture *tex, uint32_t *tex_bpp,
 	case 0x01000000u: *tex_bpp = 8; return xb == 0x1b000000u ? 0 : -1;                          /* F16F16F16F16 as F16F16F16F16 */
 	case 0x21000000u: return xb == 0x1a000000u ? 1 : -1;                                        /* F11F11F10 as F11F11F10 */
 	case 0x41000000u: return xb == 0x9a000000u ? 2 : -1;                                        /* U2F10F10F10 as U2F10F10F10 */
-	case 0x11000000u: return xb == 0x0c000000u ? 3 : xb == 0x0d000000u ? 4 : -1;                /* F32F32 as U8U8U8U8 / S8S8S8S8 bytes */
+	case 0x11000000u:
+		if (xb == 0x1e000000u) { *tex_bpp = 8; swz[0] = 0; swz[1] = 1; swz[2] = 4; swz[3] = 5; return 0; }   /* F32F32 as F32F32: (r, g, 0, 1) -- God Eater samples its full-screen 960x544 one
+		                                                                                               * every frame; without the view it came down to guest memory each frame (10-40 ms) */
+		return xb == 0x0c000000u ? 3 : xb == 0x0d000000u ? 4 : -1;                /* F32F32 as U8U8U8U8 / S8S8S8S8 bytes */
 	case 0x00000000u: return xb == 0x0c000000u && view_swz_u8x4(tgt_fmt, swz) ? 0 : -1;       /* U8U8U8U8 as U8U8U8U8 (a sub-rectangle; the exact case binds the target
 	                                                                                               * itself), any target swizzle: the selectors composed with the bytes it
 	                                                                                               * stores (view_swz.h). ABGR only before: an A8R8G8B8 atlas read as

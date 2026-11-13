@@ -328,7 +328,7 @@ static const Rows7 *glyph_for(char ch) {
 #define CHAR_H (GLYPH_H * OSD_SCALE + 3)         /* +3px between lines */
 #define OSD_MARGIN 6
 #define OSD_MAX_COLS 34
-#define OSD_MAX_ROWS 6
+#define OSD_MAX_ROWS 7
 #define OSD_MAX_W (OSD_MARGIN * 2 + OSD_MAX_COLS * CHAR_W)
 #define OSD_MAX_H (OSD_MARGIN * 2 + OSD_MAX_ROWS * CHAR_H)
 
@@ -349,7 +349,7 @@ static void draw_glyph(uint8_t *buf, int stride_px, char ch, int x, int y) {
  * rules that out, this is belt and suspenders for a buffer that's cheap to keep */
 static uint8_t *osd_buf[2]; static int osd_live, osd_w, osd_h;
 static int osd_level_v = -1;   /* -1: RECOMP_OSD not read yet */
-static char line_full[6][40]; static int n_full;
+static char line_full[7][40]; static int n_full;
 
 int metrics_osd_level(void) {   /* F1 (the window's event thread) writes it, every present reads it: atomic */
 	int v = __atomic_load_n(&osd_level_v, __ATOMIC_RELAXED);
@@ -494,7 +494,9 @@ static void maybe_tick(uint64_t now) {
 	if (threads > 0) snprintf(line_full[4], sizeof line_full[4], "CPU %.0f%% THREADS %d MEM %uMB", cpu, threads, mem_mb);
 	else snprintf(line_full[4], sizeof line_full[4], "CPU %.0f%% MEM %uMB", cpu, mem_mb);   /* (no cheap count: Windows) */
 	snprintf(line_full[5], sizeof line_full[5], "AUDIO %uMS Q %u UNDERRUN", am, au);
-	n_full = 6;
+	{ extern int gfx_gpu_builds_pending(void); int pb = gfx_gpu_builds_pending();   /* pipelines / shaders compiling (the stutter while a new effect first shows) */
+	  snprintf(line_full[6], sizeof line_full[6], "SHADER BUILDS %d PENDING", pb); }
+	n_full = 7;
 
 	snap.fps = (float)fps; snap.frame_ms_avg = (float)avg_ms; snap.frame_ms_max = (float)max_ms;
 	snap.speed = (float)speed; snap.window_fps = (float)wfps; snap.render_ms = (float)render_ms; snap.present_ms = (float)present_ms;

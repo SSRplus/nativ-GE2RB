@@ -165,8 +165,8 @@ jobs:
       - name: recompile
         env:
           RECOMP_UNSUP_NEAR: "0x8103eec4"
-          RECOMP_REFS: "0x8103f8e5 0xb804c994 0xb804c995"
-          RECOMP_DISASM: "0xb804c994:0x60:arm 0xb804c994:0x60"
+          RECOMP_REFS: ""
+          RECOMP_DISASM: "0x8101c5b0:0x140 0x8101cd0a:0x40 0xb804cbe4:0x20:arm 0xb804cbe4:0x20"
         run: |
           .venv/bin/python pipeline/vitarecomp.py import "$TITLE"
           .venv/bin/python pipeline/vitarecomp.py analyze "$TITLE"

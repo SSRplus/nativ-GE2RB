@@ -528,6 +528,19 @@ void recomp_unimplemented(Cpu *c, uint32_t addr) {
 			fprintf(stderr, "  mem %s+%x->%08x:", rn[k], 4 * w, q); for (int x = 0; x < 12; x++) fprintf(stderr, " %08x", RD32(q + 4u * x)); fprintf(stderr, "\n");
 		}
 	}
+	{	/* the task the failed check looked at (r8+0x30), its Proc (+0xc): if that is an import stub, the name it stands for and the
+		 * export it reaches -- the Title passes the address of an imported function as the save task's Proc */
+		uint32_t r8 = c->r[8];
+		if (r8 >= 0x10000000u && r8 < 0x80000000u && !(r8 & 3)) {
+			uint32_t t = RD32(r8 + 0x30);
+			if (t >= 0x10000000u && t < 0x80000000u && !(t & 3)) {
+				uint32_t proc = RD32(t + 0xc); const char *nm = import_name_any(proc & ~1u);
+				fprintf(stderr, "  task %#x Proc %#x: %s", t, proc, nm ? "import stub" : "not an import stub");
+				if (nm) { uint32_t ex = export_addr(nm); fprintf(stderr, " %s -> module export %#x", nm, ex); }
+				fprintf(stderr, "\n");
+			}
+		}
+	}
 	if (*hle_last_format) fprintf(stderr, "last formatted string: %s\n", hle_last_format);
 	summary("stopped"); exit(2);
 }

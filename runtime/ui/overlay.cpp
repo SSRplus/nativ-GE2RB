@@ -1223,7 +1223,7 @@ static void build_pause_banner(float w, float hgt) {
  * (metrics.c's F1 lines) -- no window, no input, the foreground draw list only */
 static const OverlayMark *g_marks; static int g_nmarks;
 static float g_rear[4];   /* the rear panel's rows on the picture, in window points (x, y, w, h); w 0: none */
-static char g_osd[6][40]; static int g_nosd;   /* the overlay's lines this frame (metrics_osd_lines) */
+static char g_osd[7][40]; static int g_nosd;   /* the overlay's lines this frame (metrics_osd_lines) */
 static float g_ft[240]; static int g_nft;      /* the full level's frame-time graph this frame (metrics_frame_times); 0: none */
 static MetricsSnapshot g_snap; static bool g_full;   /* the full level's numbers this frame (metrics_snapshot) */
 int overlay_draws_hud(void) { return g_ctx && g_has_window; }
@@ -1947,7 +1947,7 @@ void overlay_frame(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w
 }
 void overlay_marks(SDL_GPUCommandBuffer *cmd, SDL_GPUTexture *target, uint32_t w, uint32_t h, double dt_s, const OverlayMark *marks, int n, const float rear_rect[4]) {
 	if (overlay_is_open()) return;   /* the menu has its own fps line (page_performance) */
-	g_nosd = metrics_osd_lines(g_osd, 6);
+	g_nosd = metrics_osd_lines(g_osd, 7);
 	g_nft = g_nosd > 1 ? metrics_frame_times(g_ft, 240) : 0;   /* more than one line: the full level */
 	g_full = metrics_osd_level() == 2; if (g_full) metrics_snapshot(&g_snap);
 	/* headless (the dump's HUD check): only with something to show. Windowed: every present -- the bar's
@@ -2011,7 +2011,7 @@ void overlay_render_forced(SDL_GPUDevice *device, SDL_GPUTexture *target, uint32
 		const char *colon = strrchr(ui, ':');   /* (U12b fix) "bar:Game" (ui_shots' page names) or bare "Game" (window.c's list): the menu key is the part after the last ':' */
 		g_force_menu = colon ? colon + 1 : ui;
 	} }
-	g_nosd = metrics_osd_lines(g_osd, 6);   /* the HUD too (RECOMP_OSD), in the same frame as the bar so it layers as it does live: under it */
+	g_nosd = metrics_osd_lines(g_osd, 7);   /* the HUD too (RECOMP_OSD), in the same frame as the bar so it layers as it does live: under it */
 	g_nft = g_nosd > 1 ? metrics_frame_times(g_ft, 240) : 0;
 	g_full = metrics_osd_level() == 2; if (g_full) metrics_snapshot(&g_snap);
 	/* three frames: the bar's first, its menu popup's auto-fit on the second, and only the settled third

@@ -67,6 +67,7 @@ int ios_boot(int *argc, char ***argv) {
 		setvbuf(stderr, NULL, _IOLBF, 0);
 	}
 	mkdir("captures", 0755); mkdir("fs", 0755);
+	setenv("RECOMP_OSD", "2", 0);   /* the stats overlay (fps, CPU, memory, GPU, shader builds) on from the start: a phone has no F1 key; ge2rb.cfg RECOMP_OSD=0 turns it off */
 	snprintf(image, sizeof image, "%s/game.img", data); snprintf(entry, sizeof entry, "%s", "0"); snprintf(budget, sizeof budget, "%s", "100000000000");
 	FILE *f = fopen("ge2rb.cfg", "r");
 	char *line = NULL; size_t cap = 0; ssize_t len;

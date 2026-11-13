@@ -400,8 +400,6 @@ class Fn:
             out = [f"{self.dst(ops[2].reg)} = recomp_tpidruro;"]   # the thread's TLS pointer
         elif mn in ("nop", "pld", "pli", "isb", "hint", "yield", "wfe", "wfi", "sev"):
             out = []   # hints
-        elif mn == "bkpt":
-            out = [f"recomp_bkpt(c, 0x{A:x}u);"]   # a game's own trap after a failed check: reported, and the code after it (the checked path) goes on
         elif mn == "adr":
             out = [f"{self.dst(ops[0].reg)} = 0x{((A + self.pc_off) & ~3) + ops[1].imm & 0xffffffff:x}u;"]
         elif mn.startswith("v"):

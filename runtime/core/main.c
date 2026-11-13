@@ -502,15 +502,6 @@ void recomp_call_external(Cpu *c, uint32_t addr) {
 		fprintf(stderr, "gxm %-44s %08x %08x %08x %08x -> %08x (host)\n", name, a0, a1, a2, a3, c->r[0]);
 }
 
-/* A bkpt in a game's code is its own trap after a failed check (an assert: the message is formatted and logged, then the trap). The
- * checks of a retail game hold on the console; here a few fail for state a host does not have yet, and stopping there ends a run
- * the game would carry on (the code after the trap is the path the check guards). So the trap is reported -- the first ones, with
- * where from -- and the code goes on; RECOMP_BKPT_STOP=1 stops at the first as an unimplemented instruction. */
-void recomp_bkpt(Cpu *c, uint32_t addr) {
-	static int stop = -1, n; if (stop < 0) stop = getenv("RECOMP_BKPT_STOP") != 0;
-	if (stop) recomp_unimplemented(c, addr);
-	if (n++ < 12) fprintf(stderr, "bkpt at %#x (lr %#x, r0 %#x): the game's own trap, skipped\n", addr, c->r[14], c->r[0]);
-}
 uint32_t recomp_unimpl_at;
 void recomp_unimplemented(Cpu *c, uint32_t addr) {
 	pthread_mutex_lock(&host_lock);

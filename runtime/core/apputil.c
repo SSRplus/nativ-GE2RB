@@ -221,7 +221,7 @@ static void h_save_slot_param(Cpu *c) {   /* (slot id, SceAppUtilSaveDataSlotPar
 }
 /* sceAppUtilSaveDataSlotSearch(SceAppUtilWorkBuffer *work (buf +0, size +4), const SceAppUtilSaveDataSlotSearchCond *cond,
  * SceAppUtilSaveDataSlotSearchResult *result, mount point). Layout as the SDK declares it (from memory of its headers, not checked
- * against a console): cond = from +0, range +4, type +8 (0: slots that exist, 1: slots that don't), order +0xc (0 ascending, 1
+ * against a console): cond = from +0, type +4 (0: slots that exist, 1: slots that don't), count +8, order +0xc (0 ascending, 1
  * descending); result = hitNum +0, slotList +4 (an array of slot ids, the game's own, else the work buffer). The first calls are
  * still dumped (0x60 bytes behind each argument) so that a wrong guess shows in the log. Answers from the real slot files (.slot<N>). */
 #define SLOT_SEARCH_MAX 256
@@ -239,7 +239,8 @@ static void h_save_slot_search(Cpu *c) {
 		}
 	}
 	if (!guest_ptr_ok(cond) || !guest_ptr_ok(result)) { RET(0x80100604u); return; }   /* (no cond / result to answer into) */
-	uint32_t from = RD32(cond), range = RD32(cond + 4), type = RD32(cond + 8), order = RD32(cond + 0xc);
+	/* what the game really sends (its log): 0 0 10 0 -- from +0, type +4 (0), count +8 (10 slots), order +0xc (0). The first guess had range at +4 */
+	uint32_t from = RD32(cond), type = RD32(cond + 4), range = RD32(cond + 8), order = RD32(cond + 0xc);
 	if (range > SLOT_SEARCH_MAX) range = SLOT_SEARCH_MAX;
 	uint32_t list = RD32(result + 4);
 	if (!guest_ptr_ok(list)) { list = guest_ptr_ok(RD32(work)) ? RD32(work) : 0; if (list) WR32(result + 4, list); }

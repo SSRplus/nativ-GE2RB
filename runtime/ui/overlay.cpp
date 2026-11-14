@@ -1432,6 +1432,7 @@ static void build_touch_badge(ImDrawList *dl) {
 	dl->AddText(font, fs * 0.75f, ImVec2(x + (bw - t2.x) * 0.5f, y + pad + t1.y + gap), IM_COL32(235, 235, 240, 230), hint);
 }
 static void build_marks(void) {
+	{ ImFont *f0 = ImGui::GetFont(); if (!f0 || !(f0->CurrentRasterizerDensity > 0.0f) || !(ImGui::GetFontSize() > 0.0f)) return; }   /* the font has no density before its first frame sets one (the stats overlay is up from the first frame on a phone): ImGui asserts on sizing text with it */
 	ImDrawList *dl = g_intro ? ImGui::GetForegroundDrawList() : ImGui::GetBackgroundDrawList();   /* over the game's frame (LOAD), under the bar and its menus; over the touch card */
 	if (g_full) build_perf_full(dl);
 	else if (g_nosd) {   /* the overlay: a translucent dark panel at the top-left corner with the lines, as the bitmap version drew it (metrics.c); below the bar while that's down */

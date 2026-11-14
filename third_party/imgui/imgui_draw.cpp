@@ -5450,7 +5450,9 @@ ImFontBaked* ImFontAtlasBakedGetOrAdd(ImFontAtlas* atlas, ImFont* font, float fo
 {
     // FIXME-NEWATLAS: Design for picking a nearest size based on some criteria?
     // FIXME-NEWATLAS: Altering font density won't work right away.
-    IM_ASSERT(font_size > 0.0f && font_rasterizer_density > 0.0f);
+    // vitarecomp: a font that has not been the current font in a frame yet has no rasterizer density (0): size its glyphs with the context's, as the frame would; a size of 0 can only be a caller's bug and becomes 1 pixel instead of ending the game
+    if (!(font_rasterizer_density > 0.0f)) { ImGuiContext* ctx = ImGui::GetCurrentContext(); font_rasterizer_density = (ctx && ctx->FontRasterizerDensity > 0.0f) ? ctx->FontRasterizerDensity : 1.0f; }
+    if (!(font_size > 0.0f)) font_size = 1.0f;
     ImGuiID baked_id = ImFontAtlasBakedGetId(font->FontId, font_size, font_rasterizer_density);
     ImFontAtlasBuilder* builder = atlas->Builder;
     ImFontBaked** p_baked_in_map = (ImFontBaked**)builder->BakedMap.GetVoidPtrRef(baked_id);

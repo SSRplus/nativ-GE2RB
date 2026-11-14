@@ -232,6 +232,25 @@ static int host_preferred(const char *n) {
 	if ((!strncmp(n, "SceSslInternal_", 15) || !strncmp(n, "sceSslInternal", 14)) && matching_local()) return 1;
 	return 0;
 }
+/* A function pointer built from an import stub's address (movw + movt, the way a game names a function for a callback or a task
+ * table): when the import is another loaded module's export, the pointer is that function. The Vita's loader gives such a value
+ * the exporter's address; kept as the stub's own address (a slot of this module's import table), a game that compares it with the
+ * function it knows (God Eater's save task: Proc == saveTask) finds two different values. Calls through the stub still reach the
+ * export either way (recomp_call_external). Imports the host provides (system calls, host-preferred routines) stay as they were. */
+uint32_t recomp_stub_ptr(uint32_t v) {
+	const char *n = import_name_any(v & ~1u);
+	if (!n || gxm_boundary(n) || host_preferred(n)) return v;
+	uint32_t t = export_addr(n);
+	if (!t) return v;
+	if (!(t & 1)) {   /* an export's address without its Thumb bit: Thumb unless its image says ARM */
+		extern int recomp_is_arm(uint32_t a); int arm = 0;
+		if (recomp_lookup(t)) arm = recomp_is_arm(t);
+		else for (int i = 0; i < nmodules; i++) if (modules[i].lookup(t)) { arm = modules[i].is_arm(t); break; }
+		if (!arm) t |= 1;
+	}
+	{ static int said; if (said++ < 24) fprintf(stderr, "    stub pointer %#x (%s) -> %#x\n", v, n, t); }
+	return t;
+}
 
 #define RESOLVE_SLOTS 4096
 static struct { uint32_t addr; HleFn fn; uint32_t target; unsigned flags; int known; } resolved[RESOLVE_SLOTS];

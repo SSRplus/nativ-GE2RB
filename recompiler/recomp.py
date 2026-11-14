@@ -39,6 +39,7 @@ IHOOKS = {}  # --insn-hooks: {instruction addr: host hook name}, called after th
 # lets loads pass each other, so code that leans on their order without a barrier between them is wrong on paper and
 # rarely on the Vita's Cortex-A9, but a wide host core reorders them often enough to show: Killzone's job queue read a
 # slot before the commit index that published it, got the worker from the lap before and froze (2026-10-18).
+STUB_HI = set()   # the high halves of this image's import stub addresses: a movt with one of them may be building a stub's address (see recomp_stub_ptr in main.c)
 SYNC_MN = {"ldrex", "strex", "ldrexb", "strexb", "ldrexh", "strexh", "ldrexd", "strexd", "dmb", "dsb"}
 ORDERED_LOADS = [True]   # --unordered-loads clears it
 # the import stubs of setjmp: a call to one becomes a host _setjmp in the calling function's own frame
@@ -221,6 +222,8 @@ class Fn:
         elif mn == "movt":
             d = self.dst(ops[0].reg)
             out = [f"{d} = ({d} & 0xffffu) | (0x{ops[1].imm & 0xffff:x}u << 16);"]
+            if (ops[1].imm & 0xffff) in STUB_HI:
+                out.append(f"{{ extern uint32_t recomp_stub_ptr(uint32_t); {d} = recomp_stub_ptr({d}); }}")
         elif mn in ("add", "adds", "sub", "subs", "adc", "adcs", "sbc", "sbcs", "rsb", "rsbs", "addw", "subw"):
             # Thumb's pc-relative add/sub with an immediate (ADDW/SUBW T4, ADD T1/T3 from the pc: the ADR forms)
             # read the pc as Align(address + 4, 4), not address + 4 -- Killzone's MD5 formed each round's
@@ -1541,6 +1544,7 @@ def main():
     entries = [e for e in entries if e not in stubs]
     bodies = [b for b in bodies if b[0] not in stubs]
     SETJMP_STUBS.update(a for a in stubs if names[a] in ("setjmp", "_setjmp"))
+    STUB_HI.update(a >> 16 for a in stubs)
     eset, chunks, fspans, maybe_arm = set(entries), {}, {}, []
 
     def junk(insns):
